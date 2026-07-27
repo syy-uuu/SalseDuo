@@ -82,22 +82,48 @@ store -> customer (ON customer.storeid = store.businessentityid) -> salesorderhe
 - DATE_TRUNC 的时间单位要用加引号的字符串：DATE_TRUNC('YEAR', some_date)
 """
 
-# sales schema 的 19 张表在这个 Genie Space 里已经预先全量挂上了（不是本脚本挂的）。
-# Genie Space 最多挂 30 张表，所以这里不整体挂 person schema，只按实际需要（客户姓名解析）
-# 补一张 person.person，避免逼近上限。
-_EXTRA_TABLES = ["person.person"]
+# Genie Space 应该挂载的完整表清单，显式列在这里（不是"默认已有 + 追加几张"，是这个
+# Space 应该有的全部表）——每次运行都会跟当前实际挂载的表做差集，缺的补上，已有的跳过，
+# 不会重复添加。这个清单本身怎么定的：sales 相关表覆盖客户/订单/销售人员/结算所需的字段，
+# person.person 用于客户姓名解析。Genie Space 目前有 30 张表的上限，加表之前先确认没有
+# 逼近这个上限。
+GENIE_TABLES = [
+    "person.person",
+    "sales.countryregioncurrency",
+    "sales.creditcard",
+    "sales.currency",
+    "sales.currencyrate",
+    "sales.customer",
+    "sales.personcreditcard",
+    "sales.salesorderdetail",
+    "sales.salesorderheader",
+    "sales.salesorderheadersalesreason",
+    "sales.salesperson",
+    "sales.salespersonquotahistory",
+    "sales.salesreason",
+    "sales.salestaxrate",
+    "sales.salesterritory",
+    "sales.salesterritoryhistory",
+    "sales.shoppingcartitem",
+    "sales.specialoffer",
+    "sales.specialofferproduct",
+    "sales.store",
+]
 
 REQUIRED_FUNCTIONS = ["calculate_credit_terms", "check_large_transaction_compliance"]
 
 
-def _merge_tables(parsed: dict, table_fullnames: list[str]) -> None:
+def _merge_tables(parsed: dict, table_fullnames: list[str]) -> list[str]:
+    """把 table_fullnames 里还没挂载的表加进去，已经存在的跳过。返回本次真正新增的表
+    （全限定名），供 main() 打印报告用。"""
     data_sources = parsed.setdefault("data_sources", {})
     existing_tables = data_sources.setdefault("tables", [])
     existing_identifiers = {t["identifier"] for t in existing_tables}
-    for fullname in table_fullnames:
-        if fullname not in existing_identifiers:
-            existing_tables.append({"identifier": fullname})
+    added = [fullname for fullname in table_fullnames if fullname not in existing_identifiers]
+    for fullname in added:
+        existing_tables.append({"identifier": fullname})
     existing_tables.sort(key=lambda t: t["identifier"])
+    return added
 
 
 def _set_text_instructions(parsed: dict, text: str) -> None:
@@ -116,10 +142,9 @@ def main() -> None:
             "且当前账号有权限访问。"
         )
     parsed = json.loads(space.serialized_space)
-    print("更新前 tables 数量:", len(parsed.get("data_sources", {}).get("tables", [])))
 
-    table_fullnames = [f"{settings.uc_catalog}.{t}" for t in _EXTRA_TABLES]
-    _merge_tables(parsed, table_fullnames)
+    table_fullnames = [f"{settings.uc_catalog}.{t}" for t in GENIE_TABLES]
+    added = _merge_tables(parsed, table_fullnames)
     _set_text_instructions(parsed, _build_instructions())
 
     # 见模块顶部说明：instructions.sql_functions 在这个 workspace 下无法通过 API 写入，
@@ -133,7 +158,15 @@ def main() -> None:
         serialized_space=json.dumps(parsed),
     )
     print(f"Genie Space 已更新: {settings.genie_space_id}")
-    print("更新后 tables 数量:", len(parsed.get("data_sources", {}).get("tables", [])))
+
+    total = len(parsed.get("data_sources", {}).get("tables", []))
+    if added:
+        print(f"\n本次新增 {len(added)} 张表:")
+        for t in added:
+            print(f"  - {t}")
+    else:
+        print("\n本次没有新增表（GENIE_TABLES 里列出的表都已经存在）。")
+    print(f"目前共 {total} 张表。")
 
     expected_functions = sorted(
         f"{settings.uc_catalog}.{settings.uc_function_schema}.{fn}" for fn in REQUIRED_FUNCTIONS

@@ -9,18 +9,18 @@ Step 7e）。这是 Databricks Apps 部署后自动生成的 service principal �
 service_principal_client_id`），Genie 生成 SQL 后实际执行查询时，走的是调用方的权限，
 调用方如果没有 SELECT/USE CATALOG/USE SCHEMA，Genie 会拒绝。
 
-授权范围只覆盖 `sales`/`person` 两个 schema（不是整个 catalog），因为 Genie Space 实际
-挂载的表就只有这两个 schema 下的（19 张 sales 表 + person.person，见
-ops/structured/setup_genie.py），`humanresources`/`purchasing` 从没被挂进 Genie，
-`production`（虽然 config.py 里留了 UC_SCHEMA_PRODUCTION 这个字段）目前也没被 Genie
-实际用到，不在这次授权范围内——如果以后往 Genie 里加了新 schema 的表，要记得同步在这里
-加一组 GRANT。`sales`/`person` 内部用 schema 级授权（不是逐张表 GRANT），会级联到里面
-所有表，不需要逐张列举维护。
+**要授权哪些表/函数，直接从 `ops/structured/setup_genie.py` 的 `GENIE_TABLES`/
+`REQUIRED_FUNCTIONS` 导入，不在这个文件里维护第二份清单**——这两个脚本一个负责"Genie
+Space 里挂哪些表"，一个负责"给谁授权能查这些表"，如果各自维护一份清单，改的时候很容易
+漏改一边（比如 `setup_genie.py` 加了张新表，这边忘了同步加 GRANT，线上会报权限错误但
+本地看代码看不出哪里漏了）。现在的关系是：`setup_genie.py` 改了 `GENIE_TABLES`，这个
+脚本自动跟着变，不需要手动同步。
 
-除了查表需要的 SELECT，Genie 生成的 SQL 里还会调用 `salesduo_agent_tools` schema 下的
-两个 UC Function（`calculate_credit_terms`/`check_large_transaction_compliance`）——
-调用函数需要的是 **EXECUTE** 权限，跟查表的 SELECT 是两种不同的权限，这里一并授予，
-不然就算表权限对了，走到调用信用规则函数那一步还是会报另一个权限错误。
+**授权粒度是逐表 SELECT（不是 schema 级），逐函数 EXECUTE（不是 schema 级）**——比之前
+版本（直接 `GRANT SELECT ON SCHEMA sales`）更精确，只授权 Genie 真正会用到的那些表/
+函数，不会因为 schema 级授权而意外多给了 `GENIE_TABLES` 里没列出的表的访问权限。
+`USE CATALOG`/`USE SCHEMA` 这两类是访问路径必需的前提条件，仍然按 schema 级授予（这两
+类本身不暴露数据，只是"看得到这个目录/schema 存在"，没必要也做成逐表）。
 
 这个脚本只授权，不撤销、不重新赋权其他身份——如果之后发现权限还不够（比如实际生效的
 身份不是 App 的 service principal，而是 Serving Endpoint 自己的运行时身份，目前没有
@@ -34,19 +34,34 @@ from __future__ import annotations
 from src.config import settings
 from src.db_client import get_workspace_client
 from ops.sql_utils import run_statement
+from ops.structured.setup_genie import GENIE_TABLES, REQUIRED_FUNCTIONS
 
 
 def _grant_statements(principal: str) -> list[str]:
-    return [
-        f"GRANT USE CATALOG ON CATALOG {settings.uc_catalog} TO `{principal}`",
-        f"GRANT USE SCHEMA ON SCHEMA {settings.uc_catalog}.{settings.uc_schema_sales} TO `{principal}`",
-        f"GRANT SELECT ON SCHEMA {settings.uc_catalog}.{settings.uc_schema_sales} TO `{principal}`",
-        f"GRANT USE SCHEMA ON SCHEMA {settings.uc_catalog}.{settings.uc_schema_person} TO `{principal}`",
-        f"GRANT SELECT ON SCHEMA {settings.uc_catalog}.{settings.uc_schema_person} TO `{principal}`",
-        # Genie 生成的 SQL 会调用这两个业务规则函数，需要 EXECUTE（不是 SELECT）
-        f"GRANT USE SCHEMA ON SCHEMA {settings.uc_catalog}.{settings.uc_function_schema} TO `{principal}`",
-        f"GRANT EXECUTE ON SCHEMA {settings.uc_catalog}.{settings.uc_function_schema} TO `{principal}`",
-    ]
+    statements = [f"GRANT USE CATALOG ON CATALOG {settings.uc_catalog} TO `{principal}`"]
+
+    # GENIE_TABLES 里的表分属不同 schema（目前是 sales/person），USE SCHEMA 按用到的
+    # schema 去重后各授一次，SELECT 逐表授予。
+    schemas = sorted({table.split(".", 1)[0] for table in GENIE_TABLES})
+    for schema in schemas:
+        statements.append(
+            f"GRANT USE SCHEMA ON SCHEMA {settings.uc_catalog}.{schema} TO `{principal}`"
+        )
+    for table in GENIE_TABLES:
+        statements.append(
+            f"GRANT SELECT ON TABLE {settings.uc_catalog}.{table} TO `{principal}`"
+        )
+
+    # Genie 生成的 SQL 会调用业务规则函数，需要 EXECUTE（不是 SELECT），逐函数授予。
+    statements.append(
+        f"GRANT USE SCHEMA ON SCHEMA {settings.uc_catalog}.{settings.uc_function_schema} TO `{principal}`"
+    )
+    for fn in REQUIRED_FUNCTIONS:
+        statements.append(
+            f"GRANT EXECUTE ON FUNCTION {settings.uc_catalog}.{settings.uc_function_schema}.{fn} TO `{principal}`"
+        )
+
+    return statements
 
 
 def main() -> None:
@@ -61,12 +76,14 @@ def main() -> None:
             "确认 App 是否已经成功创建过（首次部署完成后才会生成 service principal）。"
         )
     print(f"App service principal: {app.service_principal_name} ({principal})")
+    print(f"本次授权覆盖 {len(GENIE_TABLES)} 张表 + {len(REQUIRED_FUNCTIONS)} 个函数"
+          f"（来源: ops/structured/setup_genie.py 的 GENIE_TABLES/REQUIRED_FUNCTIONS）\n")
 
     for stmt in _grant_statements(principal):
         run_statement(client, stmt)
         print(f"已执行: {stmt}")
 
-    print("授权完成。")
+    print("\n授权完成。")
 
 
 if __name__ == "__main__":
