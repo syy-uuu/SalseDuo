@@ -14,8 +14,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from databricks.ai_search.client import VectorSearchClient
 from databricks.sdk.service.catalog import VolumeType
+from databricks.sdk.service.vectorsearch import (
+    DeltaSyncVectorIndexSpecRequest,
+    EmbeddingSourceColumn,
+    PipelineType,
+    VectorIndexType,
+)
 
 from src.config import settings
 from src.db_client import get_workspace_client
@@ -97,25 +102,36 @@ def create_and_populate_delta_table(client, chunks: list[Chunk]) -> None:
     print(f"已写入 {len(chunks)} 条 chunk 到 {table}")
 
 
-def create_delta_sync_index() -> None:
+def create_delta_sync_index(client) -> None:
     """建 Delta Sync Index。假定 VECTOR_SEARCH_ENDPOINT 已经存在
-    （见 `ops/rag/setup_vs_endpoint.py`），这里不再创建/检查 endpoint 本身。"""
-    vsc = VectorSearchClient(disable_notice=True)
+    （见 `ops/rag/setup_vs_endpoint.py`），这里不再创建/检查 endpoint 本身。
+
+    用 databricks-sdk 自带的 `client.vector_search_indexes`，不用 databricks-ai-search 包——
+    原因同 `setup_vs_endpoint.py`：该包的认证只认 PAT/Service Principal 静态 token，不支持
+    本项目用的 Azure CLI（az login）动态令牌认证。
+    """
     try:
-        vsc.get_index(endpoint_name=settings.vector_search_endpoint, index_name=settings.vector_search_index)
+        client.vector_search_indexes.get_index(index_name=settings.vector_search_index)
         print(f"Vector Search index 已存在: {settings.vector_search_index}")
         return
     except Exception:
         pass
 
-    vsc.create_delta_sync_index(
+    client.vector_search_indexes.create_index(
+        name=settings.vector_search_index,
         endpoint_name=settings.vector_search_endpoint,
-        index_name=settings.vector_search_index,
         primary_key="chunk_id",
-        source_table_name=settings.delta_table_docs_chunks,
-        pipeline_type="TRIGGERED",
-        embedding_source_column="content",
-        embedding_model_endpoint_name=settings.embedding_model_endpoint,
+        index_type=VectorIndexType.DELTA_SYNC,
+        delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
+            source_table=settings.delta_table_docs_chunks,
+            pipeline_type=PipelineType.TRIGGERED,
+            embedding_source_columns=[
+                EmbeddingSourceColumn(
+                    name="content",
+                    embedding_model_endpoint_name=settings.embedding_model_endpoint,
+                )
+            ],
+        ),
     )
     print(f"已创建 Vector Search index: {settings.vector_search_index}")
 
@@ -137,7 +153,7 @@ def main() -> None:
     chunks = chunk_all(docs_dir)
     create_and_populate_delta_table(client, chunks)
 
-    create_delta_sync_index()
+    create_delta_sync_index(client)
     print("文档解析与索引建仓完成。")
 
 

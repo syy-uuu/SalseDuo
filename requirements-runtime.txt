@@ -2,7 +2,6 @@
 # 这份文件是 ops/deploy_model.py 打包给 Model Serving 的 pip_requirements，不要往这里加
 # 只有建仓脚本（ops/）或测试才用得到的包——那些走根目录 requirements.txt。
 databricks-sdk>=0.40.0
-databricks-ai-search>=0.1.0
 databricks-langchain>=0.3.0
 langgraph>=0.2.0
 langchain-core>=0.3.0

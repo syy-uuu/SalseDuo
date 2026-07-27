@@ -1,16 +1,19 @@
 """unstructured_agent 节点调用 Vector Search 的轻量封装：输入 query，返回 top-k chunk。
 
-按 CLAUDE.md 第3节要求，直接调 Vector Search 查询接口，不额外包装成 Knowledge Assistant。
+不用 databricks-ai-search 这个第三方包——它的认证逻辑只认 PAT 或 Service Principal 的静态
+token，不支持 Azure CLI（az login）这种会自动刷新的动态令牌，本项目切到 Azure 原生认证后
+这个包会在建 client 那一步直接报 "Please specify either personal access token or service
+principal client ID and secret."。改用 databricks-sdk 自带的
+`WorkspaceClient().vector_search_indexes`，走跟其他所有代码一致的同一套认证
+（`get_workspace_client()`），不需要给这一个模块单独处理认证问题。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
-
-from databricks.ai_search.client import VectorSearchClient
 
 from src.config import settings
+from src.db_client import get_workspace_client
 
 _RESULT_COLUMNS = ["chunk_id", "source_file", "section_title", "chunk_type", "content"]
 
@@ -25,20 +28,16 @@ class RetrievedChunk:
     score: float
 
 
-@lru_cache(maxsize=1)
-def _get_index():
-    settings.require("vector_search_endpoint", "vector_search_index")
-    vsc = VectorSearchClient(disable_notice=True)
-    return vsc.get_index(
-        endpoint_name=settings.vector_search_endpoint,
-        index_name=settings.vector_search_index,
-    )
-
-
 def retrieve(query: str, k: int = 5) -> list[RetrievedChunk]:
-    index = _get_index()
-    result = index.similarity_search(columns=_RESULT_COLUMNS, query_text=query, num_results=k)
-    data_array = result.get("result", {}).get("data_array", [])
+    settings.require("vector_search_index")
+    client = get_workspace_client()
+    response = client.vector_search_indexes.query_index(
+        index_name=settings.vector_search_index,
+        columns=_RESULT_COLUMNS,
+        query_text=query,
+        num_results=k,
+    )
+    data_array = (response.result.data_array if response.result else None) or []
     chunks = []
     for row in data_array:
         values = dict(zip(_RESULT_COLUMNS + ["score"], row))

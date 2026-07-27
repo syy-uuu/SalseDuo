@@ -97,5 +97,25 @@ class Settings:
                 f"缺少必需的环境变量/配置项: {', '.join(missing)}。请在 .env 中补充后重试。"
             )
 
+    def __post_init__(self) -> None:
+        # 不是所有代码路径都经过 src/db_client.py 拿 WorkspaceClient——比如
+        # databricks.ai_search.client.VectorSearchClient 内部走的是 mlflow 自己的凭据
+        # 解析逻辑，会新建一个不带任何参数的 WorkspaceClient()，根本不知道
+        # AZURE_SUBSCRIPTION_ID/RESOURCE_GROUP_NAME/DATABRICKS_WORKSPACE_NAME 这三个自定义
+        # 变量的存在。databricks-sdk 官方认的是 DATABRICKS_AZURE_RESOURCE_ID 这个环境变量
+        # （任何裸 WorkspaceClient() 都会自动读它），这里把拼好的资源 ID 写回这个环境变量，
+        # 让所有代码路径（不管是不是经过我们自己的封装）都能用同一套 Azure 认证。
+        if (
+            not os.environ.get("DATABRICKS_AZURE_RESOURCE_ID")
+            and self.azure_subscription_id
+            and self.azure_resource_group_name
+            and self.azure_databricks_workspace_name
+        ):
+            os.environ["DATABRICKS_AZURE_RESOURCE_ID"] = (
+                f"/subscriptions/{self.azure_subscription_id}"
+                f"/resourceGroups/{self.azure_resource_group_name}"
+                f"/providers/Microsoft.Databricks/workspaces/{self.azure_databricks_workspace_name}"
+            )
+
 
 settings = Settings()

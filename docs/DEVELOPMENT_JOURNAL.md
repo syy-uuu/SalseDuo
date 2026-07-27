@@ -855,7 +855,7 @@ chat/completions/embeddings 类型的 serving endpoint 设计的，它的字段�
 
 ---
 
-### 案例 11（未解决）：Serving Endpoint 身份下 Genie 查表报权限错误
+### 案例 11（已解决，见 2026-07-27 补充）：Serving Endpoint 身份下 Genie 查表报权限错误
 
 **现象**：本地用个人 token 跑 `build_graph().invoke(...)` 完全正常，但同一个问题通过已
 部署的 Serving Endpoint 调用时，`structured_agent` 报错：
@@ -898,6 +898,27 @@ Databricks Model Serving 针对 Genie 这类资源的"自动鉴权"机制里，�
 **对应文件**：这个问题本身没有对应的代码修改（还没修好），相关的诊断代码在
 `src/agent.py`（trace 通过 `custom_outputs` 暴露）里。
 
+**2026-07-27 补充（问题已解决）**：当时排查方向卡在"给 `account users` 组授权"和
+"找 Serving Endpoint 自己的系统身份"这两条路上，两条都走不通。真正的答案是**第三条路**：
+**Databricks App 部署后会自动生成一个独立的 service principal
+（`client.apps.get(app_name).service_principal_client_id`），这个 App 自己的
+service principal 才是实际执行 Genie 查询时用到的身份**，不是 Serving Endpoint 自己
+另外有一个身份，也不是 `account users` 这种账号级别的组。用户自己查到了这条线索，验证
+方式是：先用本机个人身份跑 `chat.py` 确认结构化查询本身没问题（一直都能跑通，不是这次
+新发现），再直接在部署好的 App 聊天框里测，复现权限报错——授权给这个 App service
+principal 之后，同一个问题在 App 里就能正常拿到结构化数据了。
+
+修复脚本：`ops/grant_app_permissions.py`（新增），授予 App 的 service principal：
+`USE CATALOG` on `adventureworks_dataagent`、`USE SCHEMA` + `SELECT` on
+`sales`/`person` 两个 schema、`USE SCHEMA` + `EXECUTE` on `salesduo_agent_tools`
+schema（后者容易漏掉——Genie 生成的 SQL 会调用两个业务规则函数，函数需要的是 `EXECUTE`
+权限，不是 `SELECT`，两种权限分开管，缺一个都会在不同阶段报错）。完整过程见
+`docs/VERIFICATION_2026-07-27.md` 补充章节。
+
+一个需要注意的推论：**每次 App 被删除重建，会拿到一个新的 service principal**，这份授权
+需要跟着重新跑一次，不是一次性永久生效的——如果以后重建过 App 之后又复现这个权限错误，
+先检查是不是忘了对新的 service principal 重新跑 `ops/grant_app_permissions.py`。
+
 ---
 
 ### 案例 12：`databricks bundle deploy` 不会自动启动 App
@@ -931,8 +952,11 @@ databricks bundle run salesduo_agent
 
 以下是这次开发中**有意识**跳过、简化、或者没有严格验证的地方，如实列出：
 
-1. **Serving Endpoint 下 Genie 权限问题未解决**（详见 Part 3 案例 11）。这是目前最大的
-   功能缺口：线上环境实际上只有"非结构化"这一半是完全好用的。
+1. ~~**Serving Endpoint 下 Genie 权限问题未解决**（详见 Part 3 案例 11）。这是目前最大的
+   功能缺口：线上环境实际上只有"非结构化"这一半是完全好用的。~~
+   **2026-07-27 已解决**，见 Part 3 案例 11 的补充说明——根因是 App 自己的 service
+   principal 没被授予底层表 SELECT / 业务规则函数 EXECUTE 权限，不是 Serving Endpoint
+   另有一个查不到的系统身份。修复脚本：`ops/grant_app_permissions.py`。
 
 2. **Genie 的 NL2SQL 生成本质上是非确定性的**。案例 3 里修的三个具体 SQL 错误，都是"这
    次具体遇到了、具体修了"，不是穷举了 Genie 可能犯的所有错误类型。换一个问题的措辞、
