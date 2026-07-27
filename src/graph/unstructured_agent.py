@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.graph.state import AgentState
-from src.tools.retriever import retrieve
+from src.clients.retriever import retrieve
 
 # 实测发现英文 embedding 模型（databricks-gte-large-en）对中文查询的跨语言匹配不够强，
 # 有些关键段落（比如"超限15%需要谁审批"对应的 Exception Handling 段落）要到 top-7/8

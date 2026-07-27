@@ -1,13 +1,12 @@
-databricks-sdk>=0.40.0
+# 本地开发/建仓/测试用的全量依赖。真正部署给 Model Serving 的只有
+# requirements-runtime.txt 那份（见 ops/deploy_model.py 的 _REQUIREMENTS_FILE）。
+-r requirements-runtime.txt
+
+# ops/ 建仓脚本专用，运行时代码不会用到
 databricks-connect>=15.4.0
-databricks-ai-search>=0.1.0
-databricks-langchain>=0.3.0
-langgraph>=0.2.0
-langchain-core>=0.3.0
-mlflow>=2.18.0
 azure-core>=1.30.0
 azure-storage-file-datalake>=12.14.0
 python-docx>=1.1.0
-python-dotenv>=1.0.1
-pydantic>=2.7.0
+
+# 测试
 pytest>=8.0.0

@@ -14,7 +14,14 @@ from src.config import settings
 from src.graph.build_graph import build_graph
 
 _READY = bool(
-    (settings.databricks_config_profile or (settings.databricks_host and settings.databricks_token))
+    (
+        settings.databricks_config_profile
+        or (
+            settings.azure_subscription_id
+            and settings.azure_resource_group_name
+            and settings.azure_databricks_workspace_name
+        )
+    )
     and settings.genie_space_id
     and settings.vector_search_index
 )

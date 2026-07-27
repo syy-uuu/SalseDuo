@@ -1,6 +1,6 @@
 # Databricks Asset Bundle 配置：部署产物只有 Databricks Apps（聊天框 UI）。
 # UC Function / Genie Space / Delta 表 / Vector Search Index / Model Serving Endpoint
-# 的建仓与部署走 src/setup/ 下的 SDK 脚本（一次性建仓动作，不适合用声明式的 bundle
+# 的建仓与部署走 ops/ 下的 SDK 脚本（一次性建仓动作，不适合用声明式的 bundle
 # resources 管理——多数是需要读取解析结果动态生成的内容，不是静态配置）。
 #
 # 注意：这份文件在本地未安装 Databricks CLI 的环境下编写，尚未跑过

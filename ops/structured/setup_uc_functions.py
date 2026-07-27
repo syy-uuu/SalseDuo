@@ -8,7 +8,7 @@
 工具的调用是通过其绑定的 SQL Warehouse 执行的，SQL Function 不依赖 serverless generic
 compute，可以规避 CLAUDE.md 第7节风险点1 提到的权限问题。
 
-用法: python -m src.setup.setup_uc_functions
+用法: python -m ops.structured.setup_uc_functions
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from src.config import settings
 from src.db_client import get_workspace_client
-from src.setup.sql_utils import run_statement
+from ops.sql_utils import run_statement
 
 _SQL_DIR = Path(__file__).parent / "sql"
 

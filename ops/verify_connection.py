@@ -1,6 +1,6 @@
 """Step 1 验证脚本：确认能通过 Databricks SDK 认证并列出 UC_CATALOG 下的 schema。
 
-用法: python -m src.setup.verify_connection
+用法: python -m ops.verify_connection
 """
 
 from __future__ import annotations

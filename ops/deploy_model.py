@@ -6,7 +6,7 @@ Genie Space / Vector Search Index / LLM Serving Endpoint / SQL Warehouse，
 Model Serving 会据此自动为 serving endpoint 的 service principal 授权访问这些资源，
 不需要手工在这些资源上单独配置权限。
 
-用法: python -m src.setup.deploy_model
+用法: python -m ops.deploy_model
 """
 
 from __future__ import annotations
@@ -25,9 +25,12 @@ from mlflow.models.resources import (
 from src.config import settings
 from src.db_client import get_workspace_client
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _AGENT_ENTRYPOINT = str(_PROJECT_ROOT / "src" / "agent.py")
-_REQUIREMENTS_FILE = str(_PROJECT_ROOT / "requirements.txt")
+# 只传运行时实际需要的依赖（见 docs/CODE_REVIEW_FINDINGS.md 第2条）：根目录 requirements.txt
+# 混了 databricks-connect/azure-*/python-docx/pytest 这些建仓脚本专用的重依赖，如果整份传给
+# log_model，会被原样打进 serving 容器镜像，运行时代码从来用不到，纯粹拖慢冷启动。
+_REQUIREMENTS_FILE = str(_PROJECT_ROOT / "requirements-runtime.txt")
 # agent.py 里 `from src.xxx import yyy` 这种写法，在 mlflow 把模型加载到隔离的 Serving
 # 容器里时也要能 resolve——code_paths 把整个 src/ 包一起打进模型artifact，mlflow 加载时会把
 # code_paths 的父目录（不是 code_paths 自己）加进 sys.path，所以 `src` 包能正常 import。

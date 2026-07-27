@@ -19,9 +19,18 @@ def _env(name: str, default: str | None = None) -> str | None:
 
 @dataclass(frozen=True)
 class Settings:
-    # Databricks 认证与连接
-    databricks_host: str | None = field(default_factory=lambda: _env("DATABRICKS_HOST"))
-    databricks_token: str | None = field(default_factory=lambda: _env("DATABRICKS_TOKEN"))
+    # Databricks 认证与连接（Azure 原生认证：不显式传 PAT，靠本机 `az login` 的 Azure AD
+    # 凭据 + 下面三个 Azure 资源坐标，由 databricks-sdk 通过 Azure Resource Manager 解析出
+    # workspace host 并鉴权）
+    azure_subscription_id: str | None = field(
+        default_factory=lambda: _env("AZURE_SUBSCRIPTION_ID")
+    )
+    azure_resource_group_name: str | None = field(
+        default_factory=lambda: _env("RESOURCE_GROUP_NAME")
+    )
+    azure_databricks_workspace_name: str | None = field(
+        default_factory=lambda: _env("DATABRICKS_WORKSPACE_NAME")
+    )
     databricks_config_profile: str | None = field(
         default_factory=lambda: _env("DATABRICKS_CONFIG_PROFILE")
     )

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.setup.chunk_docs import chunk_all
+from ops.rag.chunk_docs import chunk_all
 
 _DOCS_DIR = Path(__file__).resolve().parent.parent / "documents_generated"
 

@@ -32,7 +32,7 @@ serialized_space 是整体替换语义），跑完之后需要重新去 UI 里�
 Instructions > SQL Queries，选中 calculate_credit_terms / check_large_transaction_
 compliance）。这是已确认的平台限制，不是本脚本能绕开的。
 
-用法: python -m src.setup.setup_genie
+用法: python -m ops.structured.setup_genie
 """
 
 from __future__ import annotations

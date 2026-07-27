@@ -13,6 +13,10 @@
 > 当时被记录在会话里，本文档引用时是逐字摘录，不是凭印象转述）。
 > 凡是**没有留存原始记录、只能靠代码改动倒推**的地方，都会显式标注"以下是推断"，不会
 > 装作是有完整证据的样子。
+>
+> **路径提醒**：本文档 Part 1-4 里引用的文件路径（`src/setup/`、`src/tools/` 等）是写作
+> 当时的真实路径，反映的是重构前的目录结构，本文档不做追溯性修改。重构后的当前路径见
+> `docs/REPOSITORY_STRUCTURE.md`。
 
 ---
 
@@ -965,3 +969,38 @@ databricks bundle run salesduo_agent
 10. **本项目全程没有初始化 git**，所以严格意义上"开发时间线"是靠文件 mtime 和会话记录
     倒推出来的，不是 commit 历史——如果以后要接手这个项目做进一步开发，建议先补一个初始
     commit，后续变更走正常的 git 工作流，不要再依赖 mtime 排查问题。
+
+---
+
+## Part 5 — 从 CLAUDE.md 迁移的补充记录
+
+`CLAUDE.md`（原建仓指示文档 v2）在 2026-07-27 被删除——它的任务（指导本项目从零建仓）已经
+完成，`CLAUDE_v1.md` 作为历史版本保留供对比，但 v1/v2 内容并不相同，v2 独有的两条内容当时
+没有被本文档收录，删除前迁移过来，避免丢失：
+
+### 已知风险点核对表（原 CLAUDE.md 第 7 节，逐条标注本文档对应出处）
+
+1. UC Function 作为 agent 工具执行需要 serverless generic compute（不是 SQL Warehouse），
+   未开启会报权限错误——**本项目实际用的是 SQL Function，执行走 SQL Warehouse，没有触发
+   这条风险**；如果以后改成 Python UC Function 实现规则计算，需要单独确认这项是否开启。
+2. Genie 多轮对话必须复用 `conversation_id`——见 [Part 2 技术方法 10](#10-genie-conversation_id-跨节点透传实现多轮)。
+3. Router 存在判断错误导致无限循环的风险，`MAX_ROUTER_LOOPS` 必须落地并测试触发路径——
+   由 `tests/test_router_loop_limit.py` 覆盖（离线可跑，构造 `loop_count` 已达上限的 state，
+   验证 router 强制走 `finalize` 且不报错）。
+4. Vector Search 的 Delta Sync Index 依赖源 Delta 表，不能直接对原始 docx 建索引——见
+   [Part 2 技术方法 6](#6-vector-search-delta-sync-index)。
+5. Genie Space 的 `serialized_space` 配置不透明，没有字段级 API 文档——见
+   [Part 3 案例 1](#案例-1genie-space-的-ui挂载函数功能实际上不需要找)。
+6. UC SQL Function 的 `CREATE OR REPLACE FUNCTION` 不校验 `RETURN` 类型是否匹配
+   `RETURNS` 声明——见 [Part 3 案例 2](#案例-2uc-function-从-step-2-起就从未真正创建成功过)。
+7. Genie 的 NL2SQL 生成本质非确定性——见 [Part 3 案例 3](#案例-3genie-生成的-sql-三种不同的错误写法同一类问题反复出现)
+   和 [Part 4](#part-4--现在还存在的已知局限) 第 2 条。
+8. **本地跑 `databricks` CLI 命令（`bundle validate`/`bundle deploy`）时，CLI 不会读取
+   项目的 `.env` 文件**——需要在当前 shell 里单独 `export DATABRICKS_HOST`/
+   `DATABRICKS_TOKEN`，或者配置 `~/.databrickscfg` profile。（这一条此前没有被任何具体
+   案例记录下来，是这次迁移唯一补充的"新"内容——踩坑发生在本地跑 `databricks bundle`
+   相关命令时，当时判断问题明显、修复只是一行 `export`，没有单独写成案例。）
+9. mlflow 从本地环境注册模型默认写到本地 SQLite，不是真正的 Databricks workspace——见
+   [Part 3 案例 6](#案例-6mlflow-把模型注册到了本地-sqlite不是真的-databricks-workspace)。
+10. Model Serving Endpoint 运行时调用 Genie 查询底层 UC 表可能遇到权限错误，即使本地个人
+    token 完全正常——见 [Part 3 案例 11（未解决）](#案例-11未解决serving-endpoint-身份下-genie-查表报权限错误)。

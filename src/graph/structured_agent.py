@@ -8,7 +8,7 @@ Genie 有状态多轮对话：复用 state 里的 genie_conversation_id，不重
 from __future__ import annotations
 
 from src.graph.state import AgentState
-from src.tools.genie_client import ask_genie
+from src.clients.genie_client import ask_genie
 
 _BUSINESS_RULE_FUNCTIONS = ["calculate_credit_terms", "check_large_transaction_compliance"]
 

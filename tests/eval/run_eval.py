@@ -14,8 +14,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.clients.llm import get_llm
 from src.graph.build_graph import build_graph
-from src.graph.llm import get_llm
 
 _EVAL_DIR = Path(__file__).parent
 _EVAL_SET_PATH = _EVAL_DIR / "eval_set.json"

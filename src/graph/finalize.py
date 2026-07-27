@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.config import settings
-from src.graph.llm import get_llm
+from src.clients.llm import get_llm
 from src.graph.state import AgentState
 
 _SYSTEM_PROMPT = """\

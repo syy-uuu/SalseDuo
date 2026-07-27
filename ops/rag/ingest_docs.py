@@ -1,9 +1,13 @@
-"""Step 3（非结构化数据侧）：
+"""非结构化数据侧数据管线：
 1. 把 documents_generated/ 原始 docx 上传到 UC_VOLUME_PATH，留存原始文件。
 2. 解析+切块，写入 DELTA_TABLE_DOCS_CHUNKS。
-3. 创建（如不存在）Vector Search endpoint 和基于该 Delta 表的 Delta Sync Index。
+3. 创建（如不存在）基于该 Delta 表的 Delta Sync Index。
 
-用法: python -m src.setup.ingest_docs
+前置条件：VECTOR_SEARCH_ENDPOINT 必须已存在——先跑
+`python -m ops.rag.setup_vs_endpoint` 建 endpoint，再跑这个脚本，不在这里重复创建 endpoint
+（见 `setup_vs_endpoint.py` 模块顶部说明，endpoint 和 index 的生命周期分开管理）。
+
+用法: python -m ops.rag.ingest_docs
 """
 
 from __future__ import annotations
@@ -15,8 +19,8 @@ from databricks.sdk.service.catalog import VolumeType
 
 from src.config import settings
 from src.db_client import get_workspace_client
-from src.setup.chunk_docs import Chunk, chunk_all
-from src.setup.sql_utils import run_statement
+from ops.rag.chunk_docs import Chunk, chunk_all
+from ops.sql_utils import run_statement
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -93,15 +97,10 @@ def create_and_populate_delta_table(client, chunks: list[Chunk]) -> None:
     print(f"已写入 {len(chunks)} 条 chunk 到 {table}")
 
 
-def create_vector_search_index() -> None:
+def create_delta_sync_index() -> None:
+    """建 Delta Sync Index。假定 VECTOR_SEARCH_ENDPOINT 已经存在
+    （见 `ops/rag/setup_vs_endpoint.py`），这里不再创建/检查 endpoint 本身。"""
     vsc = VectorSearchClient(disable_notice=True)
-    endpoints = {e["name"] for e in vsc.list_endpoints().get("endpoints", [])}
-    if settings.vector_search_endpoint not in endpoints:
-        vsc.create_endpoint(name=settings.vector_search_endpoint, endpoint_type="STANDARD")
-        print(f"已创建 Vector Search endpoint: {settings.vector_search_endpoint}")
-    else:
-        print(f"Vector Search endpoint 已存在: {settings.vector_search_endpoint}")
-
     try:
         vsc.get_index(endpoint_name=settings.vector_search_endpoint, index_name=settings.vector_search_index)
         print(f"Vector Search index 已存在: {settings.vector_search_index}")
@@ -138,8 +137,8 @@ def main() -> None:
     chunks = chunk_all(docs_dir)
     create_and_populate_delta_table(client, chunks)
 
-    create_vector_search_index()
-    print("Step 3 文档解析与索引建仓完成。")
+    create_delta_sync_index()
+    print("文档解析与索引建仓完成。")
 
 
 if __name__ == "__main__":
