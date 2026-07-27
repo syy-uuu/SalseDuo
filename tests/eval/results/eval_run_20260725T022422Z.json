@@ -1,0 +1,900 @@
+{
+  "run_timestamp": "20260725T022422Z",
+  "summary": {
+    "total": 10,
+    "overall": {
+      "CORRECT": 6,
+      "PARTIALLY_CORRECT": 1,
+      "INCORRECT": 1,
+      "ERROR": 2
+    },
+    "by_category": {
+      "structured_only": {
+        "CORRECT": 2,
+        "PARTIALLY_CORRECT": 0,
+        "INCORRECT": 0,
+        "ERROR": 0
+      },
+      "unstructured_only": {
+        "CORRECT": 1,
+        "PARTIALLY_CORRECT": 0,
+        "INCORRECT": 1,
+        "ERROR": 0
+      },
+      "multi_hop": {
+        "CORRECT": 3,
+        "PARTIALLY_CORRECT": 1,
+        "INCORRECT": 0,
+        "ERROR": 2
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "structured_1",
+      "category": "structured_only",
+      "question": "Brakes and Gears 这家店一共下过多少笔订单？总金额是多少？",
+      "ground_truth": "12 笔订单，总金额约 $989,184.08 美元。",
+      "grading_notes": "直接查 adventureworks_dataagent.sales.store/customer/salesorderheader 即可得到，不需要查政策文档。核心校验点：订单数=12，总金额≈989184（允许合理的四舍五入误差）。数据来源: 2026-07-25 通过 SQL warehouse 直接查询验证。",
+      "agent_answer": "Brakes and Gears 这家店一共下过 **12** 笔订单，总金额为 **989,184.08**。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要检索具体客户的交易数据和订单历史，应该查询结构化数据库",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "Brakes and Gears 这家店一共下过多少笔订单？总金额是多少？",
+          "sql_queries": [
+            "SELECT COUNT(*) AS order_count, SUM(`totaldue`) AS total_amount\nFROM `adventureworks_dataagent`.`sales`.`salesorderheader`\nWHERE `customerid` IN (\n  SELECT `customerid`\n  FROM `adventureworks_dataagent`.`sales`.`customer`\n  WHERE `storeid` = (\n    SELECT `businessentityid`\n    FROM `adventureworks_dataagent`.`sales`.`store`\n    WHERE `name` = 'Brakes and Gears'\n  )\n) AND `totaldue` IS NOT NULL"
+          ],
+          "output_summary": "你想知道名为 Brakes and Gears 的店铺一共下了多少笔订单，以及这些订单的总金额是多少。\nBrakes and Gears 这家店一共下过 **12** 笔订单，总金额为 **989,184.08**。"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已经获取到了子商品的订单信息，包括订单数量和订单总金额，该信息完对了用户的问题。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Brakes and Gears 这家店一共下过 **12** 笔订单，总金额为 **989,184.08**。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答中，订单数为 12 笔，总金额为 989,184.08 美元，完全符合标准答案和评分要点的要求。"
+      },
+      "error": null
+    },
+    {
+      "id": "structured_2",
+      "category": "structured_only",
+      "question": "First Bike Store 首次下单日期是哪一天？",
+      "ground_truth": "2022-05-30。",
+      "grading_notes": "直接查 salesorderheader 里该客户最早的 orderdate，不需要查政策文档。核心校验点：日期为 2022-05-30（月份/年份需完全对，日可容忍格式差异）。",
+      "agent_answer": "First Bike Store 的首次下单日期是 2022 年 5 月 30 日。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要检索First Bike Store的交易数据和订单历史来确定首次下单日期",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "First Bike Store 首次下单日期是哪一天？",
+          "sql_queries": [
+            "SELECT MIN(`salesorderheader`.`orderdate`) AS first_order_date\nFROM `adventureworks_dataagent`.`sales`.`salesorderheader`\nJOIN `adventureworks_dataagent`.`sales`.`customer` ON `salesorderheader`.`customerid` = `customer`.`customerid`\nJOIN `adventureworks_dataagent`.`sales`.`store` ON `customer`.`storeid` = `store`.`businessentityid`\nWHERE `store`.`name` = 'First Bike Store' AND `salesorderheader`.`orderdate` IS NOT NULL"
+          ],
+          "output_summary": "你想知道 First Bike Store 的首次下单日期，即该店铺的最早订单日期。\n\"First Bike Store\" 的首次下单日期是 **2022年5月30日**。"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已给出了 First Bike Store 的马主下单日期，不续需要查询其他信息。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "First Bike Store 的首次下单日期是 2022 年 5 月 30 日。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答中，First Bike Store 的首次下单日期是 2022 年 5 月 30 日，与标准答案 2022-05-30 相同，月份和年份完全对，日的格式略有差异，但仍在允许范围内。"
+      },
+      "error": null
+    },
+    {
+      "id": "unstructured_1",
+      "category": "unstructured_only",
+      "question": "Tier 1 Strategic Partner 客户的账期是多少天？需要多少预付款？",
+      "ground_truth": "账期 Net 90 天，预付款要求为 0%（Advance Payment Required: 0% Advance Required）。",
+      "grading_notes": "直接来自 AW_Corporate_Credit_and_Payment_Terms_Policy.docx 第2节客户分级矩阵，不需要查任何结构化数据。核心校验点：90天 + 0%预付款两个数字都要对。",
+      "agent_answer": "Tier 1 Strategic Partner 客户的账期是 90 天，不需要预付款。 \n\n由于信息来源于提供的政策文档检索结果，且相关信息已完整呈现，因此无需说明信息不完整。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司信用/合规政策规则来确定Tier 1 Strategic Partner客户的账期和预付款要求",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: Tier 1 Strategic Partner 客户的账期是多少天？需要多少预付款？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t11",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.6019981735919828
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t10",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5492422585507888
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t9",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5392710999098428
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5178852632373823
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.513388277564501
+            }
+          ],
+          "output_summary": "[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "对于Tier 1 Strategic Partner的资期是Net 90 Days、领付为0%。对于这个单位、已经找到了答案与规则。不作为一次不止不合能的查询。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Tier 1 Strategic Partner 客户的账期是 90 天，不需要预付款。 \n\n由于信息来源于提供的政策文档检索结果，且相关信息已完整呈现，因此无需说明信息不完整。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent的答案为《Tier 1 Strategic Partner 客户的资期是 90 天、不需要领付款。》。源该信息源于提供的榎明文档测呼结果、不起不存在网络上的数据。"
+      },
+      "error": null
+    },
+    {
+      "id": "unstructured_2",
+      "category": "unstructured_only",
+      "question": "如果客户信用额度超限比例超过15%，需要谁签字批准？",
+      "ground_truth": "需要 VP of Sales（销售副总裁）背书，并由 CFO（首席财务官）最终签字批准（原文：detailed commercial justification via the Corporate Risk Assessment Portal, endorsed by the VP of Sales, and finalized via explicit sign-off from the Chief Financial Officer）。",
+      "grading_notes": "直接来自 AW_Corporate_Credit_and_Payment_Terms_Policy.docx 第3节例外审批流程，不需要查任何结构化数据。核心校验点：必须同时提到 VP of Sales 和 CFO 两个角色，缺一不算完全正确。",
+      "agent_answer": "根据提供的政策文档检索结果，客户信用额度超限比例超过15%需要批准的具体负责人信息未在给出的文档中明确提及。然而，文档中提到“Approved By: Chief Financial Officer & VP of Risk Management”，这意味着财务总监和风险管理副总裁可能对信用额度和付款条款政策有批准权。由于信息收集已达到循环上限，可能存在一些信息未被完整收录，因此本回答基于现有信息，可能不完整。",
+      "loop_count_used": 5,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询信用额度超限比例超过15%的批准流程政策规则",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t3",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4922994441362791
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4838053230756078
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4821333194625043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Regulation ID: AW-COMP-REG-014\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要进一步查询信用额度超限比例超过15%的签字批准政策规则",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 2,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t3",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4922994441362791
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4838053230756078
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4821333194625043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Regulation ID: AW-COMP-REG-014\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management"
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "需要进一步查询信用额度超限比例超过15%的签字批准政策规则，当前检索到的政策原文中没有明确说明这一点",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 3,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t3",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4922994441362791
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4838053230756078
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4821333194625043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Regulation ID: AW-COMP-REG-014\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management"
+        },
+        {
+          "step": "router",
+          "loop_index": 3,
+          "reasoning": "需要进一步检索政策文档以确定信用额度超限比例超过15%时需要谁签字批准",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 4,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t3",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4922994441362791
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4838053230756078
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4821333194625043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Regulation ID: AW-COMP-REG-014\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management"
+        },
+        {
+          "step": "router",
+          "loop_index": 4,
+          "reasoning": "需要进一步检索政策文档以确定信用额度超限比例超过15%的签字批准流程",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 5,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t3",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.49537728551542903
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4922994441362791
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4838053230756078
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4821333194625043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Effective Date: July 1, 2026\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Regulation ID: AW-COMP-REG-014\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management"
+        },
+        {
+          "step": "router",
+          "loop_index": 5,
+          "reasoning": "已达到路由循环上限 (5)，强制结束。",
+          "output_summary": "next_step=finalize (loop cap)"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 5,
+          "reasoning": "hit_loop_limit",
+          "output_summary": "根据提供的政策文档检索结果，客户信用额度超限比例超过15%需要批准的具体负责人信息未在给出的文档中明确提及。然而，文档中提到“Approved By: Chief Financial Officer & VP of Risk Management”，这意味着财务总监和风险管理副总裁可能对信用额度和付款条款政策有批准权。由于信息收集已达到循环上限，可能存在一些信息未被完整收录，因此本回答基于现有信息，可能不完整。"
+        }
+      ],
+      "grade": {
+        "verdict": "INCORRECT",
+        "reasoning": "因为给了的答案不能经止消费用法上接于审承价债过置流募率过过15切比例当前需读为体资产业务组件为带承与主些资产官断宜二个角色。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_1",
+      "category": "multi_hop",
+      "question": "Brakes and Gears 这家店从首次下单到现在合作了大约多久？按照公司信用政策，这样的合作年限和采购规模能定级到哪个客户分级？对应的最高信用额度和账期分别是多少？",
+      "ground_truth": "首次下单 2022-06-30，距今(2026-07-25)约 4 年。该店总采购额约 $989,184（约 3 年订单周期内），未超过 Tier 2 所需的年采购额 > $1,000,000 门槛，因此应定级为 Tier 3 Standard Account：最高信用额度 $250,000 美元，账期 Net 45 天，预付款 0%-10%（视审核情况）。",
+      "grading_notes": "需要先查 sales 表算出该客户首次下单日期和历史采购总额（结构化），再结合信用政策矩阵（非结构化）判断分级和条款（可能还需调用 calculate_credit_terms 函数验证）。核心校验点：分级=Tier 3，最高额度=$250,000，账期=Net 45天。年采购额无论按'总额'还是'年均'解读都低于$1M门槛，结论对两种解读都稳健。",
+      "agent_answer": "",
+      "loop_count_used": null,
+      "trace": [],
+      "grade": null,
+      "error": "OperationFailed: failed to reach COMPLETED, got MessageStatus.FAILED: current status: MessageStatus.FAILED"
+    },
+    {
+      "id": "multi_hop_2",
+      "category": "multi_hop",
+      "question": "如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+      "ground_truth": "Brakes and Gears 是 Tier 3 Standard Account，最高信用额度 $250,000。申请 $300,000 超过上限，超限比例 = (300000-250000)/250000 = 20%。因为超限比例超过15%，需要 VP of Sales 背书 + CFO 最终签字批准（VP_SALES_AND_CFO_SIGNOFF）。",
+      "grading_notes": "需要先确定该客户的分级/额度上限（结构化查询+规则计算），再应用信用政策里的超限审批规则（非结构化文档）。核心校验点：超限=是，超限比例=20%，审批方=VP of Sales + CFO。",
+      "agent_answer": "根据提供的信息，Brakes and Gears 申请 30 万美元的信用额度确实超过了其分级允许的上限。其允许的最高信用额度为 250,000 美元，而申请金额为 300,000 美元，超限比例为 20.0%。此外，需要 VP_SALES_AND_CFO_SIGNOFF 审批。\n\n请注意，由于路由已达到循环上限（5），以下回答基于已收集到的信息，可能不完整。",
+      "loop_count_used": 5,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司信用/合规政策规则来判断信用额度是否超过分级允许的上限以及审批流程",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: 如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p12",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5108482093231976
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5048372343099699
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.501393014190121
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p6",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.4964884003506985
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.49407782993098043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要检索信用额度政策规则原文以确定Brakes and Gears申请30万美元的信用额度是否超过其分级允许的上限。当前检索到的政策/规则原文中没有明确提到信用额度的上限和超限比例，需要继续检索相关政策文档。",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 2,
+          "reasoning": "检索 query: 如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p12",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5108482093231976
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5048372343099699
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.501393014190121
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p6",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.4964884003506985
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.49407782993098043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works."
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "需要检索信用额度政策规则原文，以确定Brakes and Gears申请30万美元的信用额度是否超过其分级允许的上限。当前检索到的政策/规则原文中没有明确提到信用额度的上限和审批流程，需要继续检索相关政策文档。",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 3,
+          "reasoning": "检索 query: 如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p12",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5108482093231976
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5048372343099699
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.501393014190121
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p6",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.4964884003506985
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.49407782993098043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works."
+        },
+        {
+          "step": "router",
+          "loop_index": 3,
+          "reasoning": "需要检索信用额度政策规则来判断Brakes and Gears申请30万美元的信用额度是否超过其分级允许的上限",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 4,
+          "reasoning": "检索 query: 如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p12",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5108482093231976
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5048372343099699
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.501393014190121
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p6",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.4964884003506985
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.49407782993098043
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works."
+        },
+        {
+          "step": "router",
+          "loop_index": 4,
+          "reasoning": "已有信用额度和付款条款的政策规则，但需要具体客户的交易数据、订单历史、金额等来判断信用额度是否超过允许的上限",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 5,
+          "question_sent": "如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Applicable To: All Sales Channels (B2B, Distributors, Direct Corporate Accounts)\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.",
+          "sql_queries": [
+            "WITH store_info AS (SELECT businessentityid FROM adventureworks_dataagent.sales.store WHERE name = 'Brakes and Gears'),first_order AS (SELECT MIN(soh.orderdate) AS first_order_date, c.customerid FROM adventureworks_dataagent.sales.salesorderheader soh JOIN adventureworks_dataagent.sales.customer c ON soh.customerid = c.customerid WHERE c.storeid = (SELECT businessentityid FROM store_info) GROUP BY c.customerid),relationship_years AS (SELECT DATEDIFF(YEAR, first_order_date, CURRENT_DATE()) AS years FROM first_order),annual_purchase AS (SELECT SUM(soh.totaldue) AS annual_purchase_volume_usd FROM adventureworks_dataagent.sales.salesorderheader soh JOIN adventureworks_dataagent.sales.customer c ON soh.customerid = c.customerid WHERE c.storeid = (SELECT businessentityid FROM store_info) AND soh.orderdate >= DATEADD(YEAR, -1, CURRENT_DATE())),credit_eval AS (SELECT adventureworks_dataagent.salesduo_agent_tools.calculate_credit_terms(CAST(r.years AS DOUBLE),COALESCE(CAST(a.annual_purchase_volume_usd AS DOUBLE), 0),FALSE,300000,NULL) AS credit_result FROM relationship_years r CROSS JOIN annual_purchase a)SELECT credit_result.tier,credit_result.max_credit_limit_usd,credit_result.exceeds_credit_limit,credit_result.overage_pct,credit_result.required_approval FROM credit_eval;"
+          ],
+          "output_summary": "你想知道名为 Brakes and Gears 的店铺申请30万美元信用额度时，是否超过其信用等级允许的最大额度，以及如果超限，超限比例是多少和需要谁来审批。\n\"Brakes and Gears\" 的客户分级为 **Tier 3 Standard Account**，其允许的最高信用额度为 **250,000 美元**。申请 **300,000 美元**的信用额度已超出上限，超限比例为 **20.0%**，需要 **VP_SALES_AND_CFO_SIGNOFF** 审批。"
+        },
+        {
+          "step": "router",
+          "loop_index": 5,
+          "reasoning": "已达到路由循环上限 (5)，强制结束。",
+          "output_summary": "next_step=finalize (loop cap)"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 5,
+          "reasoning": "hit_loop_limit",
+          "output_summary": "根据提供的信息，Brakes and Gears 申请 30 万美元的信用额度确实超过了其分级允许的上限。其允许的最高信用额度为 250,000 美元，而申请金额为 300,000 美元，超限比例为 20.0%。此外，需要 VP_SALES_AND_CFO_SIGNOFF 审批。\n\n请注意，由于路由已达到循环上限（5），以下回答基于已收集到的信息，可能不完整。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent对应中指出评分结论为起上评分，为CORRECT。与模拟结论一起。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_3",
+      "category": "multi_hop",
+      "question": "First Bike Store 从首次下单到现在合作了多久？按信用政策，这样的客户可以申请到的最高信用额度和账期是多少？",
+      "ground_truth": "首次下单 2022-05-30，距今(2026-07-25)约 4 年多。总采购额约 $801,766，未超过 Tier 2 所需的 > $1,000,000 年采购额门槛，因此定级为 Tier 3 Standard Account：最高信用额度 $250,000 美元，账期 Net 45 天。",
+      "grading_notes": "需要先查该客户首次下单日期和历史采购总额（结构化），再结合信用政策矩阵判断分级（非结构化）。核心校验点：分级=Tier 3，最高额度=$250,000，账期=Net 45天。",
+      "agent_answer": "",
+      "loop_count_used": null,
+      "trace": [],
+      "grade": null,
+      "error": "OperationFailed: failed to reach COMPLETED, got MessageStatus.FAILED: current status: MessageStatus.FAILED"
+    },
+    {
+      "id": "multi_hop_4",
+      "category": "multi_hop",
+      "question": "Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？",
+      "ground_truth": "该店最大单笔订单金额约 $124,249.49。根据大额交易合规规定，公司支票（Corporate Cheque）对大额交易是'严格禁止'（Strictly Prohibited for Bulk Supply），不允许使用，除非有全球经销商的有效公司豁免文件。",
+      "grading_notes": "需要先查该客户历史订单里金额最大的一笔（结构化），再核对结算方式合规规定（非结构化，也可能调用 check_large_transaction_compliance 函数）。核心校验点：最大订单金额≈$124,249，公司支票结算=不允许/严格禁止。",
+      "agent_answer": "Brakes and Gears 最大的一笔订单金额是 **124,249.49 美元**。如果这笔交易采用公司支票（Corporate Cheque）结算，根据公司的大额交易合规规定，这种结算方式是不被允许的，因为公司支票结算存在严重的清算延迟和支票bounce风险，除非有有效的公司豁免文件，否则全球分销商都被禁止使用这种结算方式。",
+      "loop_count_used": 2,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司大额交易合规规定，判断Brakes and Gears最大的一笔订单金额是否符合公司政策要求",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5537337473732129
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.538091772627678
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p6",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.538053962080642
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p12",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5369931415969993
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t11",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.5261893343431666
+            }
+          ],
+          "output_summary": "[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Corporate Cheques (Checks); Compliance Status: Strictly Prohibited for Bulk Supply; Mandatory Risk Controls & Protocols: Not accepted for large transactions due to severe clearings delays and bounce risks. Banned for global distributors without a valid corporate waiver document."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要检索Brakes and Gears的最大一笔订单金额，且需要根据大额交易合规规定判断公司支票是否可用",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 2,
+          "question_sent": "Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Corporate Cheques (Checks); Compliance Status: Strictly Prohibited for Bulk Supply; Mandatory Risk Controls & Protocols: Not accepted for large transactions due to severe clearings delays and bounce risks. Banned for global distributors without a valid corporate waiver document.",
+          "sql_queries": [
+            "WITH store_id AS (\n  SELECT `businessentityid` FROM `adventureworks_dataagent`.`sales`.`store` WHERE `name` = 'Brakes and Gears'\n),\nmax_order AS (\n  SELECT soh.`totaldue` AS max_totaldue\n  FROM `adventureworks_dataagent`.`sales`.`customer` c\n  JOIN store_id s ON c.`storeid` = s.`businessentityid`\n  JOIN `adventureworks_dataagent`.`sales`.`salesorderheader` soh ON soh.`customerid` = c.`customerid`\n  ORDER BY soh.`totaldue` DESC\n  LIMIT 1\n)\nSELECT \n  max_order.max_totaldue,\n  adventureworks_dataagent.salesduo_agent_tools.check_large_transaction_compliance(\n    'CORPORATE_CHEQUE',\n    max_order.max_totaldue,\n    'USD',\n    0\n  ) AS compliance_result\nFROM max_order;"
+          ],
+          "output_summary": "你想知道名为“Brakes and Gears”的门店中，最大的一笔订单金额是多少，并且想了解如果这笔交易使用公司支票结算，是否符合公司的大额交易合规规定。\nBrakes and Gears 最大的一笔订单金额为 **124,249.49 美元**。如果这笔交易采用公司支票（Corporate Cheque）结算，合规状态为 **Strictly Prohibited for Bulk Supply**，结算方式不被允许，原因是“Not accepted for large transactions due to severe clearing delays and bounce risks. Banned for global distributors without a valid corporate waiver document.”"
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "路由模型连续 3 次输出格式错误，安全降级为 finalize: Error code: 400 - {'error_code': 'BAD_REQUEST', 'message': 'Error: Model response did not respect the required format. Please consider retrying or using a more straightforward prompt. Model Output: <function=RouterDecision>{\"next_step\": \"finalize\", \"reason\": \"\\\\u5df2\\\\u627e\\\\u5230\\\\u4e86\\\\u5e73\\\\u53f0\\\\u7684\\\\u989d\\\\u591a\\\\u4e2a\\\\u8ba2\\\\u5355\\\\u91d1\\\\u989d\\\\u662f124,249.49\\\\u82f1\\\\u7f8e\\\\u5143\\\\u3001\\\\u4e0d\\\\u80fd\\\\u4f7f\\\\u7528\\\\u516c\\\\u53f8\\\\u7eed\\\\u7a97\\\\u7ed3\\\\u7b97\\\\u3002\\\\u5bf9\\\\u4e8e\\\\u8fd9\\\\u4e2a\\\\u4e8b\\\\u4ef6\\\\u3001\\\\u4e0d\\\\u7528\\\\u4e0a\\\\u4e00\\\\u6b65\\\\u52a8\\\\u4f5c\\\\u3002)}</function>\\n'}",
+          "output_summary": "next_step=finalize (LLM format failure)"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 2,
+          "reasoning": "sufficient_info",
+          "output_summary": "Brakes and Gears 最大的一笔订单金额是 **124,249.49 美元**。如果这笔交易采用公司支票（Corporate Cheque）结算，根据公司的大额交易合规规定，这种结算方式是不被允许的，因为公司支票结算存在严重的清算延迟和支票bounce风险，除非有有效的公司豁免文件，否则全球分销商都被禁止使用这种结算方式。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答正确地指出了 Brakes and Gears 最大的一笔订单金额约为 $124,249.49，并且正确地说明了公司支票结算方式在大额交易中是不允许的，除非有全球经销商的有效公司豁免文件。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_5",
+      "category": "multi_hop",
+      "question": "Health Spa, Limited 最大的一笔订单金额是多少？如果他们想用信用证（Letter of Credit）结算一笔同等金额的交易，是否符合标准审批状态？",
+      "ground_truth": "该店最大单笔订单金额约 $135,606.68。信用证（Letter of Credit）在公司规定里只有金额超过 $250,000 才算'Approved for Global Orders > $250k'的标准审批状态；$135,606.68 低于这个门槛，所以不算标准审批状态（settlement_allowed 应为 false / 不符合标准）。",
+      "grading_notes": "需要先查该客户最大单笔订单金额（结构化），再核对信用证结算的金额门槛规则（非结构化/UC Function）。核心校验点：最大订单金额≈$135,607，信用证在此金额下不算标准审批（低于25万美元门槛）。",
+      "agent_answer": "Health Spa, Limited 最大的一笔订单金额为 **135,606.68 美元**。如果他们想用信用证（Letter of Credit）结算同等金额的交易，审批状态为 **“Not Standard Below $250k Threshold”**，且结算不被允许（settlement_allowed = **false**）。该交易需要满足“必须由顶级国际金融机构确认的不可撤销信用证，并经财务部预先审核”这一控制要求。由于信息收集和计算过程中没有遇到任何循环次数上限或信息缺失问题，因此上述结论是基于完整的数据计算结果得出的。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要检索Health Spa, Limited的交易数据和订单历史来确定最大的一笔订单金额，并计算信用证结算的审批状态",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "Health Spa, Limited 最大的一笔订单金额是多少？如果他们想用信用证（Letter of Credit）结算一笔同等金额的交易，是否符合标准审批状态？",
+          "sql_queries": [
+            "WITH max_order AS (SELECT soh.totaldue FROM `adventureworks_dataagent`.`sales`.`store` s JOIN `adventureworks_dataagent`.`sales`.`customer` c ON s.businessentityid = c.storeid JOIN `adventureworks_dataagent`.`sales`.`salesorderheader` soh ON c.customerid = soh.customerid WHERE s.name = 'Health Spa, Limited' AND soh.totaldue IS NOT NULL QUALIFY RANK() OVER (ORDER BY soh.totaldue DESC) = 1) SELECT max_order.totaldue AS max_order_amount, compliance_result.compliance_status, compliance_result.settlement_allowed, compliance_result.required_controls, compliance_result.currency_approved, compliance_result.fx_hedging_clause_required FROM max_order CROSS JOIN LATERAL (SELECT adventureworks_dataagent.salesduo_agent_tools.check_large_transaction_compliance('LETTER_OF_CREDIT', max_order.totaldue, 'USD', 0) AS compliance_result)"
+          ],
+          "output_summary": "You want to know the largest order amount for the store named 'Health Spa, Limited' and whether a transaction of the same amount settled by Letter of Credit meets the standard approval compliance.\nHealth Spa, Limited 最大的一笔订单金额为 **135,606.68 美元**。如果他们想用信用证（Letter of Credit）结算同等金额的交易，审批状态为 **“Not Standard Below $250k Threshold”**，且结算不被允许（settlement_allowed = **false**）。该交易需要满足“必须由顶级国际金融机构确认的不可撤销信用证，并经财务部预先审核”这一控制要求。"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已找到最大的订单金额和订单体事结終等例效能结果，字找了用消资产为给带体事结終等例效能结果，不作为续找带体事结終等例效能结果。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Health Spa, Limited 最大的一笔订单金额为 **135,606.68 美元**。如果他们想用信用证（Letter of Credit）结算同等金额的交易，审批状态为 **“Not Standard Below $250k Threshold”**，且结算不被允许（settlement_allowed = **false**）。该交易需要满足“必须由顶级国际金融机构确认的不可撤销信用证，并经财务部预先审核”这一控制要求。由于信息收集和计算过程中没有遇到任何循环次数上限或信息缺失问题，因此上述结论是基于完整的数据计算结果得出的。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答正确地指出 Health Spa, Limited 最大的一笔订单金额约为 $135,606.68，并且正确地根据信用证结算的金额门槛规则判断出该金额低于 $250,000 的门槛，不符合标准审批状态。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_6",
+      "category": "multi_hop",
+      "question": "Vigorous Exercise Company 最大一笔订单金额是多少？如果他们要签一份为期2年、以欧元结算、金额相当于这笔最大订单金额的合同，是否需要强制加入外汇对冲条款？",
+      "ground_truth": "该店最大单笔订单金额约 $109,340.82。外汇对冲条款只有当合同为多年期（>1年）、非美元结算、且金额超过 $1,000,000 时才强制要求；这笔金额（约$10.9万）远低于 $1,000,000 门槛，所以不需要强制加外汇对冲条款（尽管期限和币种条件满足，金额条件不满足）。",
+      "grading_notes": "需要先查该客户最大单笔订单金额（结构化），再核对外汇对冲条款的触发条件（非结构化/UC Function，三个条件都要满足才强制）。核心校验点：最大订单金额≈$109,341，结论=不需要强制外汇对冲条款，理由需提到金额未达100万美元门槛。",
+      "agent_answer": "Vigorous Exercise Company 最大一笔订单金额为 109,340.82 美元。如果他们要签一份为期 2 年、以欧元结算、金额等同于该订单的合同，根据合规校验，**不需要强制加入外汇对冲条款**。该交易的结算方式和币种均已获批准。 \n\n注意：上述信息基于提供的中间结果，可能不完整或受限于数据来源和查询次数。",
+      "loop_count_used": 2,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要了解公司信用/合规政策规则中关于外汇对冲条款的相关规定，尤其是在签订大额合同时的要求。同时，需要获取Vigorous Exercise Company的最大一笔订单金额信息，但首先需要了解相关的政策规则。因此，下一步应该查询非结构化文档。",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: Vigorous Exercise Company 最大一笔订单金额是多少？如果他们要签一份为期2年、以欧元结算、金额相当于这笔最大订单金额的合同，是否需要强制加入外汇对冲条款？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.5306290507103195
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5253461596626906
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t4",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.524240461229299
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p12",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5239927822819905
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5226701374960145
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Approved By: General Counsel, Chief Compliance Officer, & VP of Treasury\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要检索Vigorous Exercise Company的最大一笔订单金额，且需要根据检索到的政策规则计算是否需要强制加入外汇对冲条款",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 2,
+          "question_sent": "Vigorous Exercise Company 最大一笔订单金额是多少？如果他们要签一份为期2年、以欧元结算、金额相当于这笔最大订单金额的合同，是否需要强制加入外汇对冲条款？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] [Header] Approved By: General Counsel, Chief Compliance Officer, & VP of Treasury\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] [Header] Approved By: Chief Financial Officer & VP of Risk Management",
+          "sql_queries": [
+            "WITH max_order AS (\n  SELECT \n    soh.salesorderid,\n    soh.totaldue\n  FROM \n    adventureworks_dataagent.sales.store s\n    JOIN adventureworks_dataagent.sales.customer c ON s.businessentityid = c.storeid\n    JOIN adventureworks_dataagent.sales.salesorderheader soh ON c.customerid = soh.customerid\n  WHERE s.name = 'Vigorous Exercise Company' AND soh.totaldue IS NOT NULL\n  ORDER BY soh.totaldue DESC\n  LIMIT 1\n)\nSELECT \n  max_order.salesorderid,\n  max_order.totaldue,\n  compliance_result.compliance_status,\n  compliance_result.settlement_allowed,\n  compliance_result.required_controls,\n  compliance_result.currency_approved,\n  compliance_result.fx_hedging_clause_required\nFROM max_order\nCROSS JOIN LATERAL (\n  SELECT adventureworks_dataagent.salesduo_agent_tools.check_large_transaction_compliance(\n    'WIRE_TRANSFER',\n    max_order.totaldue,\n    'EUR',\n    2\n  ) AS compliance_result\n)"
+          ],
+          "output_summary": "You want to find the largest order amount for the Vigorous Exercise Company and check if a 2-year contract settled in euros for that amount requires a mandatory foreign exchange hedging clause.\nVigorous Exercise Company 最大一笔订单金额为 109,340.82 美元（订单号 45529）。如果他们要签一份为期 2 年、以欧元结算、金额等同于该订单的合同，根据合规校验，**不需要强制加入外汇对冲条款**。该交易的结算方式和币种均已获批准，且必须确保资金来源于与销售合同一致的公司银行账户，不允许第三方付款。"
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "已找到最大订单价值和合作结果，不为突三次查询。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 2,
+          "reasoning": "sufficient_info",
+          "output_summary": "Vigorous Exercise Company 最大一笔订单金额为 109,340.82 美元。如果他们要签一份为期 2 年、以欧元结算、金额等同于该订单的合同，根据合规校验，**不需要强制加入外汇对冲条款**。该交易的结算方式和币种均已获批准。 \n\n注意：上述信息基于提供的中间结果，可能不完整或受限于数据来源和查询次数。"
+        }
+      ],
+      "grade": {
+        "verdict": "PARTIALLY_CORRECT",
+        "reasoning": "Agent 的回答正确指出最大订单金额约为 $109,340.82，并且结论正确地表明不需要强制加入外汇对冲条款。但是，Agent 的理由过于简略，没有明确提到金额未达 $1,000,000 门槛是主要原因。"
+      },
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+# Databricks Asset Bundle 配置：部署产物只有 Databricks Apps（聊天框 UI）。
+# UC Function / Genie Space / Delta 表 / Vector Search Index / Model Serving Endpoint
+# 的建仓与部署走 src/setup/ 下的 SDK 脚本（一次性建仓动作，不适合用声明式的 bundle
+# resources 管理——多数是需要读取解析结果动态生成的内容，不是静态配置）。
+#
+# 注意：这份文件在本地未安装 Databricks CLI 的环境下编写，尚未跑过
+# `databricks bundle validate`，请在具备 CLI 和真实凭据后先跑一遍 validate 再 deploy。
+bundle:
+  name: salesduo
+
+variables:
+  databricks_app_name:
+    description: Databricks App 名称
+    default: salesduo-agent
+  model_serving_endpoint_name:
+    description: 承载 ResponsesAgent 的 Model Serving Endpoint 名称
+    default: salesduo-agent
+
+resources:
+  apps:
+    salesduo_agent:
+      name: ${var.databricks_app_name}
+      description: "SalesDuo AdventureWorks 结构化+非结构化数据问答聊天框"
+      source_code_path: ./app
+      resources:
+        - name: model-serving-endpoint
+          serving_endpoint:
+            name: ${var.model_serving_endpoint_name}
+            permission: CAN_QUERY
+
+targets:
+  dev:
+    default: true
+    mode: development

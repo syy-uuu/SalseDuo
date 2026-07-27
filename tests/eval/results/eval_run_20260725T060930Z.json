@@ -1,0 +1,938 @@
+{
+  "run_timestamp": "20260725T060930Z",
+  "summary": {
+    "total": 10,
+    "overall": {
+      "CORRECT": 8,
+      "PARTIALLY_CORRECT": 0,
+      "INCORRECT": 2,
+      "ERROR": 0
+    },
+    "by_category": {
+      "structured_only": {
+        "CORRECT": 2,
+        "PARTIALLY_CORRECT": 0,
+        "INCORRECT": 0,
+        "ERROR": 0
+      },
+      "unstructured_only": {
+        "CORRECT": 2,
+        "PARTIALLY_CORRECT": 0,
+        "INCORRECT": 0,
+        "ERROR": 0
+      },
+      "multi_hop": {
+        "CORRECT": 4,
+        "PARTIALLY_CORRECT": 0,
+        "INCORRECT": 2,
+        "ERROR": 0
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "structured_1",
+      "category": "structured_only",
+      "question": "Brakes and Gears 这家店一共下过多少笔订单？总金额是多少？",
+      "ground_truth": "12 笔订单，总金额约 $989,184.08 美元。",
+      "grading_notes": "直接查 adventureworks_dataagent.sales.store/customer/salesorderheader 即可得到，不需要查政策文档。核心校验点：订单数=12，总金额≈989184（允许合理的四舍五入误差）。数据来源: 2026-07-25 通过 SQL warehouse 直接查询验证。",
+      "agent_answer": "Brakes and Gears 这家店一共下过 **12** 笔订单，总金额为 **989,184.08**。这是该店所有订单的汇总数据。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要检索具体客户的交易数据和订单历史，应该查询结构化数据库",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "Brakes and Gears 这家店一共下过多少笔订单？总金额是多少？",
+          "sql_queries": [
+            "SELECT COUNT(*) AS order_count, SUM(`salesorderheader`.`totaldue`) AS total_amount\nFROM `adventureworks_dataagent`.`sales`.`salesorderheader`\nJOIN `adventureworks_dataagent`.`sales`.`customer` ON `salesorderheader`.`customerid` = `customer`.`customerid`\nJOIN `adventureworks_dataagent`.`sales`.`store` ON `customer`.`storeid` = `store`.`businessentityid`\nWHERE `store`.`name` = 'Brakes and Gears' AND `salesorderheader`.`totaldue` IS NOT NULL"
+          ],
+          "output_summary": "你想知道名为“Brakes and Gears”的店铺一共完成了多少笔订单，以及这些订单的总金额是多少。\nBrakes and Gears 这家店一共下过 **12** 笔订单，总金额为 **989,184.08**。这是该店所有订单的汇总数据。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已经获取到了平台与额量的结果，不为传续查询。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Brakes and Gears 这家店一共下过 **12** 笔订单，总金额为 **989,184.08**。这是该店所有订单的汇总数据。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答中，订单数为 12 笔，总金额为 989,184.08 美元，完全符合标准答案和评分要点中的核心信息，且允许合理的四舍五入差异。"
+      },
+      "error": null
+    },
+    {
+      "id": "structured_2",
+      "category": "structured_only",
+      "question": "First Bike Store 首次下单日期是哪一天？",
+      "ground_truth": "2022-05-30。",
+      "grading_notes": "直接查 salesorderheader 里该客户最早的 orderdate，不需要查政策文档。核心校验点：日期为 2022-05-30（月份/年份需完全对，日可容忍格式差异）。",
+      "agent_answer": "\"First Bike Store\" 的首次下单日期是 2022年5月30日。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要检索First Bike Store的交易数据和订单历史来确定首次下单日期",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "First Bike Store 首次下单日期是哪一天？",
+          "sql_queries": [
+            "SELECT MIN(h.orderdate) AS first_order_date\nFROM `adventureworks_dataagent`.`sales`.`store` s\nJOIN `adventureworks_dataagent`.`sales`.`customer` c ON s.businessentityid = c.storeid\nJOIN `adventureworks_dataagent`.`sales`.`salesorderheader` h ON c.customerid = h.customerid\nWHERE s.name = 'First Bike Store'"
+          ],
+          "output_summary": "You want to find the earliest order date for the store named 'First Bike Store'.\n\"First Bike Store\" 的首次下单日期是 **2022年5月30日**。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已经有了回答用户问题所需的全部信息",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "\"First Bike Store\" 的首次下单日期是 2022年5月30日。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答是 2022 年 5 月 30 日，与标准答案 2022-05-30 相同，月份和年份完全匹配，日的格式略有差异，但仍然是正确的。"
+      },
+      "error": null
+    },
+    {
+      "id": "unstructured_1",
+      "category": "unstructured_only",
+      "question": "Tier 1 Strategic Partner 客户的账期是多少天？需要多少预付款？",
+      "ground_truth": "账期 Net 90 天，预付款要求为 0%（Advance Payment Required: 0% Advance Required）。",
+      "grading_notes": "直接来自 AW_Corporate_Credit_and_Payment_Terms_Policy.docx 第2节客户分级矩阵，不需要查任何结构化数据。核心校验点：90天 + 0%预付款两个数字都要对。",
+      "agent_answer": "Tier 1 Strategic Partner 客户的账期是 90 天，不需要预付款（0% Advance Required）。 \n\n信息来源完整，回答基于提供的政策文档检索结果。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司信用/合规政策规则来确定Tier 1 Strategic Partner客户的账期和预付款要求",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: Tier 1 Strategic Partner 客户的账期是多少天？需要多少预付款？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t7",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.6019981735919828
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t6",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5492422585507888
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5392710999098428
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5178852632373823
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5118729491781024
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p8",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.4870630255062053
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t4",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.48272401568809953
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.4789072630162875
+            }
+          ],
+          "output_summary": "[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Telegraphic Transfer / Wire Transfer (T/T); Compliance Status: Standard / Highly Approved; Mandatory Risk Controls & Protocols: Funds must originate from a verified corporate bank account under the identical legal entity name matching the sales contract. No third-party payments allowed.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY"
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "对于Tier 1 Strategic Partner的资期是最多90天、领保债券0%。对于这个问题、已经找到给错的网易信息。不为要了下一步动作。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Tier 1 Strategic Partner 客户的账期是 90 天，不需要预付款（0% Advance Required）。 \n\n信息来源完整，回答基于提供的政策文档检索结果。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent的题多为 Tier 1 Strategic Partner 客户的资期是 90 天、不需要领付款 (《0%前付款需民》)"
+      },
+      "error": null
+    },
+    {
+      "id": "unstructured_2",
+      "category": "unstructured_only",
+      "question": "如果客户信用额度超限比例超过15%，需要谁签字批准？",
+      "ground_truth": "需要 VP of Sales（销售副总裁）背书，并由 CFO（首席财务官）最终签字批准（原文：detailed commercial justification via the Corporate Risk Assessment Portal, endorsed by the VP of Sales, and finalized via explicit sign-off from the Chief Financial Officer）。",
+      "grading_notes": "直接来自 AW_Corporate_Credit_and_Payment_Terms_Policy.docx 第3节例外审批流程，不需要查任何结构化数据。核心校验点：必须同时提到 VP of Sales 和 CFO 两个角色，缺一不算完全正确。",
+      "agent_answer": "如果客户信用额度超限比例超过15%，需要首先通过Corporate Risk Assessment Portal提交详细的商业理由，并由销售副总裁（VP of Sales）背书，然后由首席财务官（CFO）进行明确的签字批准。 \n\n注意：信息基于提供的政策文档检索结果，可能不涵盖所有情况或最新更新。",
+      "loop_count_used": 2,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询信用额度超限比例超过15%的政策规则和批准流程",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t5",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.4768550153518087
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.4755764033402648
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.46945872509021724
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t6",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.4692837128294033
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t7",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.46921135122588936
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t4",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.467339053924835
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "3. Exception Handling and Special Approval Workflow",
+              "score": 0.46156088912874305
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t7",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.4581172832918245
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Documentary Letters of Credit (L/C); Compliance Status: Approved for Global Orders > $250k; Mandatory Risk Controls & Protocols: Must be issued as an Irrevocable Letter of Credit confirmed by a top-tier international financial institution. Subject to pre-clearance by Treasury Operations.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Telegraphic Transfer / Wire Transfer (T/T); Compliance Status: Standard / Highly Approved; Mandatory Risk Controls & Protocols: Funds must originate from a verified corporate bank account under the identical legal entity name matching the sales contract. No third-party payments allowed.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 3. Exception Handling and Special Approval Workflow] 3. Exception Handling and Special Approval Workflow\nSales representatives are strictly prohibited from promising or offering payment terms or credit boundaries that deviate from the standard matrix above without formal electronic approval before contract signatures. Any requested deviation (e.g., a new customer requesting Net 90 days or a request to bypass the 30% advance downpayment) must undergo the strict escalation workflow below:\nCredit Extensions Up to 15% Over Limit / Move to Next Term Level: Requires formal recommendation from the Regional Sales Director and final digital sign-off from the Corporate Risk & Credit Manager.\nCredit Extensions Above 15% or Long-term Net 90 Extensions: Requires detailed commercial justification via the Corporate Risk Assessment Portal, endorsed by the VP of Sales, and finalized via explicit sign-off from the Chief Financial Officer (CFO).\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Corporate Cheques (Checks); Compliance Status: Strictly Prohibited for Bulk Supply; Mandatory Risk Controls & Protocols: Not accepted for large transactions due to severe clearings delays and bounce risks. Banned for global distributors without a valid corporate waiver document."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "用户问题中公司修笔额编发负债过三15%。不过也找到对应的编发规则，不能答出要讨写找计承人。不作为一次查询。",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 2,
+          "reasoning": "检索 query: 如果客户信用额度超限比例超过15%，需要谁签字批准？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t5",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.4768550153518087
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.4755764033402648
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.46945872509021724
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t6",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.4692837128294033
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t7",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.46921135122588936
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t4",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.467339053924835
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p8",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "3. Exception Handling and Special Approval Workflow",
+              "score": 0.46156088912874305
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t7",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.4581172832918245
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Documentary Letters of Credit (L/C); Compliance Status: Approved for Global Orders > $250k; Mandatory Risk Controls & Protocols: Must be issued as an Irrevocable Letter of Credit confirmed by a top-tier international financial institution. Subject to pre-clearance by Treasury Operations.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Telegraphic Transfer / Wire Transfer (T/T); Compliance Status: Standard / Highly Approved; Mandatory Risk Controls & Protocols: Funds must originate from a verified corporate bank account under the identical legal entity name matching the sales contract. No third-party payments allowed.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 3. Exception Handling and Special Approval Workflow] 3. Exception Handling and Special Approval Workflow\nSales representatives are strictly prohibited from promising or offering payment terms or credit boundaries that deviate from the standard matrix above without formal electronic approval before contract signatures. Any requested deviation (e.g., a new customer requesting Net 90 days or a request to bypass the 30% advance downpayment) must undergo the strict escalation workflow below:\nCredit Extensions Up to 15% Over Limit / Move to Next Term Level: Requires formal recommendation from the Regional Sales Director and final digital sign-off from the Corporate Risk & Credit Manager.\nCredit Extensions Above 15% or Long-term Net 90 Extensions: Requires detailed commercial justification via the Corporate Risk Assessment Portal, endorsed by the VP of Sales, and finalized via explicit sign-off from the Chief Financial Officer (CFO).\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Corporate Cheques (Checks); Compliance Status: Strictly Prohibited for Bulk Supply; Mandatory Risk Controls & Protocols: Not accepted for large transactions due to severe clearings delays and bounce risks. Banned for global distributors without a valid corporate waiver document."
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "已找到答案用于审论币作限制的编号，不作为续找很多的信息，并也不能为了使用不起事的查询，就给了答案与网易信息，忽略了用户的问题。该用于币作限制的编号是《计付二级组件》。如果审付限制负债过渡之15%，不能为使用不起事的查询，并也不能为了使用不起事的查询，忽略了用户的问题。该用于币作限制的编号是《为使用不起事的查询，忽略了用户的问题。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 2,
+          "reasoning": "sufficient_info",
+          "output_summary": "如果客户信用额度超限比例超过15%，需要首先通过Corporate Risk Assessment Portal提交详细的商业理由，并由销售副总裁（VP of Sales）背书，然后由首席财务官（CFO）进行明确的签字批准。 \n\n注意：信息基于提供的政策文档检索结果，可能不涵盖所有情况或最新更新。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent的答案有效指出些对的位置，对于评分结论、三节例子流程和不股过给个位置等骂名不起不能为定义。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_1",
+      "category": "multi_hop",
+      "question": "Brakes and Gears 这家店从首次下单到现在合作了大约多久？按照公司信用政策，这样的合作年限和采购规模能定级到哪个客户分级？对应的最高信用额度和账期分别是多少？",
+      "ground_truth": "首次下单 2022-06-30，距今(2026-07-25)约 4 年。该店总采购额约 $989,184（约 3 年订单周期内），未超过 Tier 2 所需的年采购额 > $1,000,000 门槛，因此应定级为 Tier 3 Standard Account：最高信用额度 $250,000 美元，账期 Net 45 天，预付款 0%-10%（视审核情况）。",
+      "grading_notes": "需要先查 sales 表算出该客户首次下单日期和历史采购总额（结构化），再结合信用政策矩阵（非结构化）判断分级和条款（可能还需调用 calculate_credit_terms 函数验证）。核心校验点：分级=Tier 3，最高额度=$250,000，账期=Net 45天。年采购额无论按'总额'还是'年均'解读都低于$1M门槛，结论对两种解读都稳健。",
+      "agent_answer": "Brakes and Gears 这家店与公司合作大约 **4年**，年均采购额为 **247,296.02美元**。根据公司信用政策，这样的合作年限和采购规模对应客户分级为 **Tier 3 Standard Account**，最高信用额度为 **250,000美元**，最长账期为 **45天**。由于提供的信息已经完整回答了用户的问题，因此无需说明信息不完整。",
+      "loop_count_used": 2,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司信用政策规则来确定客户分级、最高信用额度和账期等信息",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: Brakes and Gears 这家店从首次下单到现在合作了大约多久？按照公司信用政策，这样的合作年限和采购规模能定级到哪个客户分级？对应的最高信用额度和账期分别是多少？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.532455991439152
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5210677422588011
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.5197752207074352
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.5151215320236722
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p8",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5061574955983413
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t7",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5055487638020913
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p2",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "1. Purpose and Scope",
+              "score": 0.5035126981670355
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5010047828946831
+            }
+          ],
+          "output_summary": "[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 1. Purpose and Scope] 1. Purpose and Scope\nAdventure Works Cycles is dedicated to maintaining high commercial standard operational safety while aggressively expanding its market footprint. The purpose of this policy is to establish clear, robust guidelines regarding commercial credit limits, customer payment terms, and continuous risk assessments. This regulation aims to minimize the companys exposure to bad debts, optimize cash flow, and prevent unauthorized credit extensions by sales representatives.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要检索Brakes and Gears的交易数据、订单历史、金额等信息，以确定其客户分级和信用额度。已经拿到政策规则/参数，下一步需要查询结构化数据库。",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 2,
+          "question_sent": "Brakes and Gears 这家店从首次下单到现在合作了大约多久？按照公司信用政策，这样的合作年限和采购规模能定级到哪个客户分级？对应的最高信用额度和账期分别是多少？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 1. Purpose and Scope] 1. Purpose and Scope\nAdventure Works Cycles is dedicated to maintaining high commercial standard operational safety while aggressively expanding its market footprint. The purpose of this policy is to establish clear, robust guidelines regarding commercial credit limits, customer payment terms, and continuous risk assessments. This regulation aims to minimize the companys exposure to bad debts, optimize cash flow, and prevent unauthorized credit extensions by sales representatives.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.",
+          "sql_queries": [
+            "WITH store_info AS (SELECT `businessentityid` FROM `adventureworks_dataagent`.`sales`.`store` WHERE `name` = 'Brakes and Gears'), customer_info AS (SELECT `customerid` FROM `adventureworks_dataagent`.`sales`.`customer` WHERE `storeid` IN (SELECT `businessentityid` FROM store_info)), first_order AS (SELECT MIN(`orderdate`) AS `first_order_date` FROM `adventureworks_dataagent`.`sales`.`salesorderheader` WHERE `customerid` IN (SELECT `customerid` FROM customer_info) AND `orderdate` IS NOT NULL), total_purchase AS (SELECT SUM(`totaldue`) AS `total_purchase` FROM `adventureworks_dataagent`.`sales`.`salesorderheader` WHERE `customerid` IN (SELECT `customerid` FROM customer_info) AND `totaldue` IS NOT NULL) SELECT relationship_years, annual_purchase_volume_usd, credit_terms.tier, credit_terms.max_credit_limit_usd, credit_terms.max_credit_term_days FROM (SELECT DATEDIFF(YEAR, (SELECT `first_order_date` FROM first_order), CURRENT_DATE()) AS relationship_years, try_divide((SELECT `total_purchase` FROM total_purchase),NULLIF(DATEDIFF(YEAR, (SELECT `first_order_date` FROM first_order), CURRENT_DATE()),0)) AS annual_purchase_volume_usd) calc CROSS JOIN LATERAL (SELECT adventureworks_dataagent.salesduo_agent_tools.calculate_credit_terms(CAST(calc.relationship_years AS DOUBLE), CAST(calc.annual_purchase_volume_usd AS DOUBLE)) AS credit_terms) func"
+          ],
+          "output_summary": "你想了解名为“Brakes and Gears”的店铺从首次下单到现在合作了多少年，以及根据公司的信用政策，这样的合作年限和采购规模对应的客户分级、最高信用额度和账期是多少。\nBrakes and Gears 这家店与公司合作大约 **4年**，年均采购额为 **247,296.02美元**。根据公司信用政策，这样的合作年限和采购规模对应客户分级为 **Tier 3 Standard Account**，最高信用额度为 **250,000美元**，最长账期为 **45天**。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "路由模型连续 3 次输出格式错误，安全降级为 finalize: Error code: 400 - {'error_code': 'BAD_REQUEST', 'message': 'Error: Model response did not respect the required format. Please consider retrying or using a more straightforward prompt. Model Output: <function=RouterDecision>{\"next_step\": \"finalize\", \"reason\": \"\\\\u5df2\\\\u7ecf\\\\u83b7\\\\u53d6\\\\u5230\\\\u5e94\\\\u8be5\\\\u4e1a\\\\u52a1\\\\u4fe1\\\\u606f\\\\uff0c\\\\u5bf9\\\\u4e8e\\\\u7528\\\\u6237\\\\u53c2\\\\u8003\\\\u7684\\\\u95ee\\\\u9898\\\\uff0c\\\\u5b66\\\\u4e60\\\\u4e86\\\\u6240\\\\u6709\\\\u5bf9\\\\u5e94\\\\u7684\\\\u4fe1\\\\u606f\\\\uff0c\\\\u5e76\\\\u4e0d\\\\u4f9b\\\\u5b58\\\\u5728\\\\u4e0d\\\\u8db3\\\\u6548\\\\u7684\\\\u4e09\\\\u6b21\\\\u67e5\\\\u8be2\\\\u3002\\\\u8ba1\\\\u7b97\\\\u7ed3\\\\u679c\\\\u4e3a\\\\u300a\\\\u5e78\\\\u4e00\\\\u7ea7\\\\u5ba1\\\\u627f\\\\u4fdd\\\\u8bc1\\\\u8d44\\\\u4ea7\\\\u300b\\\\uff0c\\\\u6700\\\\u9ad8\\\\u4fe1\\\\u7528\\\\u989d\\\\u4e3a$250\\\\u3000250\\\\u3000\\\\u4e07\\\\u300b\\\\uff0c\\\\u8d77\\\\u6b21\\\\u6700\\\\u957f\\\\u8d44\\\\u4ea7\\\\u671f\\\\u4e3a45\\\\u5929\\\\u3002\\\\u5f53\\\\u524d\\\\u4e0d\\\\u4f9b\\\\u7eed\\\\u884c\\\\u4e0b\\\\u4e00\\\\u6b65\\\\u52a8\\\\u4f5c\\\\u3002)}</function>\\n'}",
+          "output_summary": "next_step=finalize (LLM format failure)"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 2,
+          "reasoning": "sufficient_info",
+          "output_summary": "Brakes and Gears 这家店与公司合作大约 **4年**，年均采购额为 **247,296.02美元**。根据公司信用政策，这样的合作年限和采购规模对应客户分级为 **Tier 3 Standard Account**，最高信用额度为 **250,000美元**，最长账期为 **45天**。由于提供的信息已经完整回答了用户的问题，因此无需说明信息不完整。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent对于店商名穹中的年业交易额和定约给低于$1,000,000的驱动约度、不起一个主要信息。不过不能以为常量和定约不起一个主要信息。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_2",
+      "category": "multi_hop",
+      "question": "如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+      "ground_truth": "Brakes and Gears 是 Tier 3 Standard Account，最高信用额度 $250,000。申请 $300,000 超过上限，超限比例 = (300000-250000)/250000 = 20%。因为超限比例超过15%，需要 VP of Sales 背书 + CFO 最终签字批准（VP_SALES_AND_CFO_SIGNOFF）。",
+      "grading_notes": "需要先确定该客户的分级/额度上限（结构化查询+规则计算），再应用信用政策里的超限审批规则（非结构化文档）。核心校验点：超限=是，超限比例=20%，审批方=VP of Sales + CFO。",
+      "agent_answer": "Brakes and Gears 申请 30 万美元的信用额度将超过其分级允许的上限。超限比例为 500%。此申请需要 VP_SALES_AND_CFO_SIGNOFF 审批。由于提供的信息已经能够回答用户的问题，因此无需额外说明。",
+      "loop_count_used": 3,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司信用/合规政策规则来判断信用额度是否超过分级允许的上限以及超限比例和审批人。",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: 如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p8",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5108482093231976
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5048372343099699
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.4964884003506985
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.49407782993098043
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.4900149956848685
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4812806457045059
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t6",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.47931801596779794
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.47764356122876944
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要检索信用额度政策规则/参数，特别是关于Brakes and Gears的分级信息和允许的信用额度上限。当前检索到的政策/规则原文中提到了不同客户等级的信用额度限制，但还需要确认Brakes and Gears属于哪个等级以及具体的信用额度限制。因此，下一步应该继续查询非结构化的政策文档，以获取更多相关信息。",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 2,
+          "reasoning": "检索 query: 如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p8",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5108482093231976
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5048372343099699
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.4964884003506985
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.49407782993098043
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.4900149956848685
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.4812806457045059
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t6",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.47931801596779794
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t5",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.47764356122876944
+            }
+          ],
+          "output_summary": "[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history."
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "需要检索Brakes and Gears的客户信息，包括其客户等级、历史交易数据和信用评分，以确定其是否超过分级允许的信用额度上限。同时，需要计算超限比例和确定审批人员。因此，下一步应该查询结构化数据库。",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 3,
+          "question_sent": "如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 2 Preferred Account; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 60 Days; Maximum Allowed Credit Limit: $750,000 USD; Qualification Criteria: Active relationship > 3 years; annual purchasing volume exceeding $1M.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 3 Standard Account; Advance Payment Required: 0% - 10% (Subject to Review); Maximum Approved Credit Term: Net 45 Days; Maximum Allowed Credit Limit: $250,000 USD; Qualification Criteria: Active relationship > 1 year; excellent payment compliance history.",
+          "sql_queries": [
+            "WITH store_info AS (SELECT `businessentityid` FROM `adventureworks_dataagent`.`sales`.`store` WHERE `name` = 'Brakes and Gears'),\norder_dates AS (SELECT MIN(`orderdate`) AS first_order_date FROM `adventureworks_dataagent`.`sales`.`salesorderheader` h JOIN store_info s ON h.`customerid` = s.`businessentityid`),\nrelationship_years AS (SELECT DATEDIFF(YEAR, first_order_date, CURRENT_DATE()) AS years FROM order_dates),\nannual_purchase AS (SELECT SUM(`totaldue`) AS annual_purchase_volume_usd FROM `adventureworks_dataagent`.`sales`.`salesorderheader` h JOIN store_info s ON h.`customerid` = s.`businessentityid` WHERE `orderdate` >= DATE_TRUNC('YEAR', CURRENT_DATE()) AND `orderdate` < DATE_TRUNC('YEAR', CURRENT_DATE()) + INTERVAL 1 YEAR),\nparams AS (SELECT r.years AS relationship_years, a.annual_purchase_volume_usd FROM relationship_years r CROSS JOIN annual_purchase a),\nresult AS (SELECT adventureworks_dataagent.salesduo_agent_tools.calculate_credit_terms(params.relationship_years, params.annual_purchase_volume_usd, FALSE, 300000) AS credit_terms FROM params)\nSELECT credit_terms.tier, credit_terms.max_credit_limit_usd, credit_terms.exceeds_credit_limit, credit_terms.overage_pct, credit_terms.required_approval FROM result;"
+          ],
+          "output_summary": "你想知道名为 Brakes and Gears 的商店申请 30 万美元信用额度时，是否超过其信用等级允许的最大额度，以及如果超限，超限的比例是多少和需要谁来审批。\nBrakes and Gears 当前分级为 **New Customer (First 12 Months)**，其允许的最高信用额度为 **50,000 美元**。申请 **30 万美元**信用额度将会**超限**，超限比例为 **500%**。此申请需要 **VP_SALES_AND_CFO_SIGNOFF** 审批。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 3,
+          "reasoning": "已经找到了带有对于 Brakes and Gears 的被掌权限上限、计算过限比例和需要找因的找因给了。当則不续需要找因了。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 3,
+          "reasoning": "sufficient_info",
+          "output_summary": "Brakes and Gears 申请 30 万美元的信用额度将超过其分级允许的上限。超限比例为 500%。此申请需要 VP_SALES_AND_CFO_SIGNOFF 审批。由于提供的信息已经能够回答用户的问题，因此无需额外说明。"
+        }
+      ],
+      "grade": {
+        "verdict": "INCORRECT",
+        "reasoning": "Agent计算的过限比侌为 500，详细不正确。过限比侌应该为 20，对应为 VP of Sales + CFO 帮扰。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_3",
+      "category": "multi_hop",
+      "question": "First Bike Store 从首次下单到现在合作了多久？按信用政策，这样的客户可以申请到的最高信用额度和账期是多少？",
+      "ground_truth": "首次下单 2022-05-30，距今(2026-07-25)约 4 年多。总采购额约 $801,766，未超过 Tier 2 所需的 > $1,000,000 年采购额门槛，因此定级为 Tier 3 Standard Account：最高信用额度 $250,000 美元，账期 Net 45 天。",
+      "grading_notes": "需要先查该客户首次下单日期和历史采购总额（结构化），再结合信用政策矩阵判断分级（非结构化）。核心校验点：分级=Tier 3，最高额度=$250,000，账期=Net 45天。",
+      "agent_answer": "First Bike Store 自 2022-05-30 首次下单以来，已合作了 4 年。根据信用政策，该客户当前可申请的最高信用额度为 250,000 美元，最长账期为 45 天。其信用分级为 Tier 3 Standard Account，无需额外审批。由于提供的信息已经涵盖了问题的所有方面，因此无需额外说明。",
+      "loop_count_used": 2,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询信用政策规则来确定First Bike Store可以申请到的最高信用额度和账期",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: First Bike Store 从首次下单到现在合作了多久？按信用政策，这样的客户可以申请到的最高信用额度和账期是多少？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5669259111904492
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.5424043848013478
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.5401261742561069
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5351369359491619
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p2",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "1. Purpose and Scope",
+              "score": 0.5305225740122546
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t4",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5276805637333287
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p8",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5164292179615106
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::t7",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5118437184646274
+            }
+          ],
+          "output_summary": "[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 1. Purpose and Scope] 1. Purpose and Scope\nAdventure Works Cycles is dedicated to maintaining high commercial standard operational safety while aggressively expanding its market footprint. The purpose of this policy is to establish clear, robust guidelines regarding commercial credit limits, customer payment terms, and continuous risk assessments. This regulation aims to minimize the companys exposure to bad debts, optimize cash flow, and prevent unauthorized credit extensions by sales representatives.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已获取信用政策/规则原文，下一步需要检索First Bike Store的具体交易数据、订单历史、金额等信息，以确定其客户等级和信用额度。",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 2,
+          "question_sent": "First Bike Store 从首次下单到现在合作了多久？按信用政策，这样的客户可以申请到的最高信用额度和账期是多少？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 1. Purpose and Scope] 1. Purpose and Scope\nAdventure Works Cycles is dedicated to maintaining high commercial standard operational safety while aggressively expanding its market footprint. The purpose of this policy is to establish clear, robust guidelines regarding commercial credit limits, customer payment terms, and continuous risk assessments. This regulation aims to minimize the companys exposure to bad debts, optimize cash flow, and prevent unauthorized credit extensions by sales representatives.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: New Customer (First 12 Months); Advance Payment Required: 30% Upfront Downpayment; Maximum Approved Credit Term: Net 30 Days; Maximum Allowed Credit Limit: $50,000 USD; Qualification Criteria: Initial registration; no prior trade record with Adventure Works.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] [2. Customer Tiering and Payment Terms Matrix] Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required: 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria: Global distributors or strategic OEMs with specific board approval.",
+          "sql_queries": [
+            "WITH store_info AS (SELECT `businessentityid` FROM `adventureworks_dataagent`.`sales`.`store` WHERE `name` = 'First Bike Store'), customer_info AS (SELECT `customerid` FROM `adventureworks_dataagent`.`sales`.`customer` WHERE `storeid` = (SELECT `businessentityid` FROM store_info)), first_order AS (SELECT MIN(`orderdate`) AS first_order_date FROM `adventureworks_dataagent`.`sales`.`salesorderheader` WHERE `customerid` IN (SELECT `customerid` FROM customer_info)), cooperation_years AS (SELECT DATEDIFF(YEAR, first_order_date, CURRENT_DATE()) AS relationship_years, first_order_date FROM first_order), annual_purchase AS (SELECT DATE_TRUNC('YEAR', `orderdate`) AS order_year, SUM(`totaldue`) AS year_total FROM `adventureworks_dataagent`.`sales`.`salesorderheader` WHERE `customerid` IN (SELECT `customerid` FROM customer_info) GROUP BY DATE_TRUNC('YEAR', `orderdate`)), avg_annual_purchase AS (SELECT AVG(year_total) AS annual_purchase_volume_usd FROM annual_purchase), credit_terms AS (SELECT adventureworks_dataagent.salesduo_agent_tools.calculate_credit_terms(c.relationship_years, a.annual_purchase_volume_usd, FALSE, 0, NULL) AS credit_terms, c.relationship_years, c.first_order_date, a.annual_purchase_volume_usd FROM cooperation_years c CROSS JOIN avg_annual_purchase a) SELECT relationship_years, first_order_date, annual_purchase_volume_usd, credit_terms.tier, credit_terms.advance_payment_min_pct, credit_terms.advance_payment_max_pct, credit_terms.max_credit_term_days, credit_terms.max_credit_limit_usd, credit_terms.exceeds_credit_limit, credit_terms.overage_pct, credit_terms.requires_net90_escalation, credit_terms.required_approval FROM credit_terms;"
+          ],
+          "output_summary": "You want to know how long First Bike Store has been a customer since their first order and, based on the credit policy, what the highest credit limit and payment terms they can apply for are.\nFirst Bike Store 自 2022-05-30 首次下单以来，已合作了 4 年，年均采购额为 200,441.55 美元。根据信用政策，该客户当前可申请的最高信用额度为 250,000 美元，最长账期为 45 天。其信用分级为 Tier 3 Standard Account，无需额外审批。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "已找到了平台客户的企业年限和收资期限，合与资产服务条件，对于诣个客户评估了最高修债额和贷期。不丢续操作。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 2,
+          "reasoning": "sufficient_info",
+          "output_summary": "First Bike Store 自 2022-05-30 首次下单以来，已合作了 4 年。根据信用政策，该客户当前可申请的最高信用额度为 250,000 美元，最长账期为 45 天。其信用分级为 Tier 3 Standard Account，无需额外审批。由于提供的信息已经涵盖了问题的所有方面，因此无需额外说明。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent对 First Bike Store 的初次下子日期和计算了幸量总额、合于修给理给中的优充算法、结论为 Tier 3 、最高债值为 $250,000 、资期为 Net 45 天"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_4",
+      "category": "multi_hop",
+      "question": "Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？",
+      "ground_truth": "该店最大单笔订单金额约 $124,249.49。根据大额交易合规规定，公司支票（Corporate Cheque）对大额交易是'严格禁止'（Strictly Prohibited for Bulk Supply），不允许使用，除非有全球经销商的有效公司豁免文件。",
+      "grading_notes": "需要先查该客户历史订单里金额最大的一笔（结构化），再核对结算方式合规规定（非结构化，也可能调用 check_large_transaction_compliance 函数）。核心校验点：最大订单金额≈$124,249，公司支票结算=不允许/严格禁止。",
+      "agent_answer": "Brakes and Gears 最大的一笔订单金额为 **124,249.49 美元**。如果这笔交易采用公司支票（Corporate Cheque）结算，根据公司大额交易合规规定，不被允许结算。结算方式因存在严重的清算延迟和退票风险而被严格禁止，且对于全球分销商，若无有效的公司豁免文件，则结算方式被禁止。因此，这笔交易不符合公司大额交易合规规定。",
+      "loop_count_used": 2,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询公司大额交易合规规定的政策文档，来判断Brakes and Gears最大的一笔订单金额是否符合公司大额交易合规规定",
+          "output_summary": "next_step=unstructured"
+        },
+        {
+          "step": "unstructured_agent",
+          "loop_index": 1,
+          "reasoning": "检索 query: Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？",
+          "retrieved_chunks": [
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p1",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "Header",
+              "score": 0.5537337473732129
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p1",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "Header",
+              "score": 0.538091772627678
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p2",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "1. Objective and Regulatory Background",
+              "score": 0.538053962080642
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::p8",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "3. Foreign Exchange (FX) and Currency Settlement Compliance",
+              "score": 0.5369931415969993
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t7",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.5261893343431666
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p3",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "2. Customer Tiering and Payment Terms Matrix",
+              "score": 0.5204188585505358
+            },
+            {
+              "chunk_id": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx::t4",
+              "source_file": "AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx",
+              "section_title": "2. Approved and Restricted Settlement Methods",
+              "score": 0.5135049361725438
+            },
+            {
+              "chunk_id": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx::p2",
+              "source_file": "AW_Corporate_Credit_and_Payment_Terms_Policy.docx",
+              "section_title": "1. Purpose and Scope",
+              "score": 0.5071896784841983
+            }
+          ],
+          "output_summary": "[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Corporate Cheques (Checks); Compliance Status: Strictly Prohibited for Bulk Supply; Mandatory Risk Controls & Protocols: Not accepted for large transactions due to severe clearings delays and bounce risks. Banned for global distributors without a valid corporate waiver document.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Telegraphic Transfer / Wire Transfer (T/T); Compliance Status: Standard / Highly Approved; Mandatory Risk Controls & Protocols: Funds must originate from a verified corporate bank account under the identical legal entity name matching the sales contract. No third-party payments allowed.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 1. Purpose and Scope] 1. Purpose and Scope\nAdventure Works Cycles is dedicated to maintaining high commercial standard operational safety while aggressively expanding its market footprint. The purpose of this policy is to establish clear, robust guidelines regarding commercial credit limits, customer payment terms, and continuous risk assessments. This regulation aims to minimize the companys exposure to bad debts, optimize cash flow, and prevent unauthorized credit extensions by sales representatives."
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "需要检索Brakes and Gears的交易数据和订单历史来确定最大的一笔订单金额，并结合已有的政策规则来判断是否符合公司大额交易合规规定",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 2,
+          "question_sent": "Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？\n\n补充背景（来自公司政策文档，供计算业务规则时参考）:\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | Header] ADVENTURE WORKS CYCLES\nCORPORATE CREDIT LIMIT AND PAYMENT TERMS POLICY\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | Header] ADVENTURE WORKS CYCLES\nLARGE TRANSACTION & SPECIAL SETTLEMENT COMPLIANCE REGULATION\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 1. Objective and Regulatory Background] 1. Objective and Regulatory Background\nAs an international market leader in premium bicycles and accessories, Adventure Works Cycles engages in cross-border volume transactions that introduce operational, financial, and legal complexities. The purpose of this regulation is to tightly control high-value bulk purchases and specify acceptable financial settlement methodologies. This policy aligns with international Anti-Money Laundering (AML) standards, Counter-Terrorism Financing (CTF) frameworks, and foreign exchange volatility control protocols.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 3. Foreign Exchange (FX) and Currency Settlement Compliance] 3. Foreign Exchange (FX) and Currency Settlement Compliance\nAll Master Sales Agreements executed globally by Adventure Works Cycles must explicitly denote the settlement currency. The authorized framework consists of the following parameters:\n• Base Standard Settlement Currency: United States Dollar (USD) serves as the primary currency for all international invoices to streamline treasury aggregation.\n• Approved Regional Currencies: Transactions executed in Euro (EUR), Australian Dollar (AUD), British Pound (GBP), or Canadian Dollar (CAD) are allowed only if structured using standard price lists indexed dynamically to the corporate monthly treasury rate.\n• FX Volatility Risk Mitigation: For any multi-year supply contract exceeding $1,000,000 USD invoiced in non-USD currency, a mandatory Forex Hedging and Currency Risk clause must be integrated, requiring a price adjustment review if the currency fluctuates by more than 3% against the USD.\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Corporate Cheques (Checks); Compliance Status: Strictly Prohibited for Bulk Supply; Mandatory Risk Controls & Protocols: Not accepted for large transactions due to severe clearings delays and bounce risks. Banned for global distributors without a valid corporate waiver document.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 2. Customer Tiering and Payment Terms Matrix] 2. Customer Tiering and Payment Terms Matrix\nAll business-to-business (B2B) customers, including regional distributors and corporate accounts, must undergo mandatory credit screening prior to the execution of any sales contract. Customers are grouped into tiers based on historical trade volume, credit scores, and length of active corporate relationship with Adventure Works Cycles:\n---\n[AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx | 2. Approved and Restricted Settlement Methods] [2. Approved and Restricted Settlement Methods] Settlement Method: Telegraphic Transfer / Wire Transfer (T/T); Compliance Status: Standard / Highly Approved; Mandatory Risk Controls & Protocols: Funds must originate from a verified corporate bank account under the identical legal entity name matching the sales contract. No third-party payments allowed.\n---\n[AW_Corporate_Credit_and_Payment_Terms_Policy.docx | 1. Purpose and Scope] 1. Purpose and Scope\nAdventure Works Cycles is dedicated to maintaining high commercial standard operational safety while aggressively expanding its market footprint. The purpose of this policy is to establish clear, robust guidelines regarding commercial credit limits, customer payment terms, and continuous risk assessments. This regulation aims to minimize the companys exposure to bad debts, optimize cash flow, and prevent unauthorized credit extensions by sales representatives.",
+          "sql_queries": [
+            "WITH store_id AS (\n  SELECT `businessentityid` \n  FROM `adventureworks_dataagent`.`sales`.`store` \n  WHERE `name` = 'Brakes and Gears'\n),\nstore_customers AS (\n  SELECT `customerid` \n  FROM `adventureworks_dataagent`.`sales`.`customer` \n  WHERE `storeid` IN (SELECT `businessentityid` FROM store_id)\n),\nmax_order AS (\n  SELECT MAX(`totaldue`) AS max_totaldue \n  FROM `adventureworks_dataagent`.`sales`.`salesorderheader` \n  WHERE `customerid` IN (SELECT `customerid` FROM store_customers)\n)\nSELECT \n  max_totaldue AS order_amount_usd,\n  adventureworks_dataagent.salesduo_agent_tools.check_large_transaction_compliance(\n    'CORPORATE_CHEQUE',\n    max_totaldue,\n    'USD',\n    0\n  ) AS compliance_result\nFROM max_order;"
+          ],
+          "output_summary": "You want to know the highest order amount placed by customers of the store named 'Brakes and Gears' and whether this order complies with the company's large transaction rules when settled by corporate cheque.\nBrakes and Gears 最大的一笔订单金额为 **124,249.49 美元**。如果这笔交易采用公司支票（Corporate Cheque）结算，合规状态为 **Strictly Prohibited for Bulk Supply**，结算方式不被允许，且需要注意“Not accepted for large transactions due to severe clearing delays and bounce risks. Banned for global distributors without a valid corporate waiver document.”。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 2,
+          "reasoning": "已经有了回答用户问题所需的全部信息，包括最大订单金额和结算方式的合规状态。因此，可以直接给出最终答案。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 2,
+          "reasoning": "sufficient_info",
+          "output_summary": "Brakes and Gears 最大的一笔订单金额为 **124,249.49 美元**。如果这笔交易采用公司支票（Corporate Cheque）结算，根据公司大额交易合规规定，不被允许结算。结算方式因存在严重的清算延迟和退票风险而被严格禁止，且对于全球分销商，若无有效的公司豁免文件，则结算方式被禁止。因此，这笔交易不符合公司大额交易合规规定。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent对Brakes and Gears的最大单个订单金额为$124,249.49、与带服支打算结论一起。世界代理商情不能使用公司打笔结论。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_5",
+      "category": "multi_hop",
+      "question": "Health Spa, Limited 最大的一笔订单金额是多少？如果他们想用信用证（Letter of Credit）结算一笔同等金额的交易，是否符合标准审批状态？",
+      "ground_truth": "该店最大单笔订单金额约 $135,606.68。信用证（Letter of Credit）在公司规定里只有金额超过 $250,000 才算'Approved for Global Orders > $250k'的标准审批状态；$135,606.68 低于这个门槛，所以不算标准审批状态（settlement_allowed 应为 false / 不符合标准）。",
+      "grading_notes": "需要先查该客户最大单笔订单金额（结构化），再核对信用证结算的金额门槛规则（非结构化/UC Function）。核心校验点：最大订单金额≈$135,607，信用证在此金额下不算标准审批（低于25万美元门槛）。",
+      "agent_answer": "Health Spa, Limited 最大的一笔订单金额为 **135,606.68 美元**。如果他们想用信用证（Letter of Credit）结算同等金额的交易，审批状态为 **“Not Standard Below $250k Threshold”**，结算方式 **不被允许**，且需要由顶级国际金融机构确认的不可撤销信用证，并经过财务部预审。由于信息收集基于特定业务规则和数据查询结果，以上结论仅基于提供的中间结果，可能不涵盖所有相关信息或最新数据。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要检索Health Spa, Limited的交易数据和订单历史来确定最大的一笔订单金额，并计算信用证结算的审批状态",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "Health Spa, Limited 最大的一笔订单金额是多少？如果他们想用信用证（Letter of Credit）结算一笔同等金额的交易，是否符合标准审批状态？",
+          "sql_queries": [
+            "WITH max_order AS (\n  SELECT soh.totaldue\n  FROM `adventureworks_dataagent`.`sales`.`store` s\n  JOIN `adventureworks_dataagent`.`sales`.`customer` c ON s.businessentityid = c.storeid\n  JOIN `adventureworks_dataagent`.`sales`.`salesorderheader` soh ON c.customerid = soh.customerid\n  WHERE s.name = 'Health Spa, Limited' AND soh.totaldue IS NOT NULL\n  ORDER BY soh.totaldue DESC\n  LIMIT 1\n)\nSELECT \n  totaldue AS max_order_amount,\n  adventureworks_dataagent.salesduo_agent_tools.check_large_transaction_compliance(\n    'LETTER_OF_CREDIT',\n    totaldue,\n    'USD',\n    0\n  ) AS compliance_result\nFROM max_order;"
+          ],
+          "output_summary": "You want to know the largest order amount for the store named 'Health Spa, Limited' and whether a transaction of that amount settled by Letter of Credit meets the standard compliance approval.\nHealth Spa, Limited 最大的一笔订单金额为 **135,606.68 美元**。如果他们想用信用证（Letter of Credit）结算同等金额的交易，审批状态为 **“Not Standard Below $250k Threshold”**，结算方式 **不被允许**，且需要由顶级国际金融机构确认的不可撤销信用证，并经过财务部预审。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已经有了回答用户问题所需的全部信息，最大订单金额为$135,606.68，信用证结算同等金额的交易审批状态为“Not Standard Below $250k Threshold“，结算方式不被允许，且需要由顶级国际金融机构确认的不可撤销信用证，并经过财务部预审。因此，可以直接回答用户的问题，无需进一步查询。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Health Spa, Limited 最大的一笔订单金额为 **135,606.68 美元**。如果他们想用信用证（Letter of Credit）结算同等金额的交易，审批状态为 **“Not Standard Below $250k Threshold”**，结算方式 **不被允许**，且需要由顶级国际金融机构确认的不可撤销信用证，并经过财务部预审。由于信息收集基于特定业务规则和数据查询结果，以上结论仅基于提供的中间结果，可能不涵盖所有相关信息或最新数据。"
+        }
+      ],
+      "grade": {
+        "verdict": "CORRECT",
+        "reasoning": "Agent 的回答正确地指出 Health Spa, Limited 最大的一笔订单金额约为 $135,606.68，并且根据信用证结算的金额门槛规则，这笔金额低于 $250,000 的门槛，因此不符合标准审批状态。"
+      },
+      "error": null
+    },
+    {
+      "id": "multi_hop_6",
+      "category": "multi_hop",
+      "question": "Vigorous Exercise Company 最大一笔订单金额是多少？如果他们要签一份为期2年、以欧元结算、金额相当于这笔最大订单金额的合同，是否需要强制加入外汇对冲条款？",
+      "ground_truth": "该店最大单笔订单金额约 $109,340.82。外汇对冲条款只有当合同为多年期（>1年）、非美元结算、且金额超过 $1,000,000 时才强制要求；这笔金额（约$10.9万）远低于 $1,000,000 门槛，所以不需要强制加外汇对冲条款（尽管期限和币种条件满足，金额条件不满足）。",
+      "grading_notes": "需要先查该客户最大单笔订单金额（结构化），再核对外汇对冲条款的触发条件（非结构化/UC Function，三个条件都要满足才强制）。核心校验点：最大订单金额≈$109,341，结论=不需要强制外汇对冲条款，理由需提到金额未达100万美元门槛。",
+      "agent_answer": "Vigorous Exercise Company 最大一笔订单金额为 **109,340.82**。如果他们签订一份为期2年、以欧元结算、金额为109,340.82的合同，结算方式合规且**不需要强制加入外汇对冲条款**。合规要求包括：资金必须来自与销售合同一致的企业银行账户，不允许第三方付款。",
+      "loop_count_used": 1,
+      "trace": [
+        {
+          "step": "router",
+          "loop_index": 0,
+          "reasoning": "需要查询Vigorous Exercise Company的最大一笔订单金额，涉及具体客户的交易数据和订单历史，应该查结构化数据",
+          "output_summary": "next_step=structured"
+        },
+        {
+          "step": "structured_agent",
+          "loop_index": 1,
+          "question_sent": "Vigorous Exercise Company 最大一笔订单金额是多少？如果他们要签一份为期2年、以欧元结算、金额相当于这笔最大订单金额的合同，是否需要强制加入外汇对冲条款？",
+          "sql_queries": [
+            "WITH max_order AS (SELECT `soh`.`totaldue` FROM `adventureworks_dataagent`.`sales`.`store` AS `s` JOIN `adventureworks_dataagent`.`sales`.`customer` AS `c` ON `s`.`businessentityid` = `c`.`storeid` JOIN `adventureworks_dataagent`.`sales`.`salesorderheader` AS `soh` ON `c`.`customerid` = `soh`.`customerid` WHERE `s`.`name` = 'Vigorous Exercise Company' AND `soh`.`totaldue` IS NOT NULL QUALIFY RANK() OVER (ORDER BY `soh`.`totaldue` DESC) = 1) SELECT max_order.totaldue AS max_order_amount, compliance_struct.compliance_status, compliance_struct.settlement_allowed, compliance_struct.required_controls, compliance_struct.currency_approved, compliance_struct.fx_hedging_clause_required FROM max_order CROSS JOIN LATERAL (SELECT adventureworks_dataagent.salesduo_agent_tools.check_large_transaction_compliance('WIRE_TRANSFER', max_order.totaldue, 'EUR', 2) AS compliance_struct)"
+          ],
+          "output_summary": "You want to know the highest order amount placed by customers of Vigorous Exercise Company and whether a 2-year contract settled in euros for that amount would require a mandatory foreign exchange hedging clause.\nVigorous Exercise Company 最大一笔订单金额为 **109,340.82**。如果他们签订一份为期2年、以欧元结算、金额为109,340.82的合同，结算方式合规且**不需要强制加入外汇对冲条款**。合规要求包括：资金必须来自与销售合同一致的企业银行账户，不允许第三方付款。",
+          "error": null
+        },
+        {
+          "step": "router",
+          "loop_index": 1,
+          "reasoning": "已找到源下给了Vigorous Exercise Company 最大一券订义金额和带了千债管理结果，不为前下一步动作。",
+          "output_summary": "next_step=finalize"
+        },
+        {
+          "step": "finalize",
+          "loop_index": 1,
+          "reasoning": "sufficient_info",
+          "output_summary": "Vigorous Exercise Company 最大一笔订单金额为 **109,340.82**。如果他们签订一份为期2年、以欧元结算、金额为109,340.82的合同，结算方式合规且**不需要强制加入外汇对冲条款**。合规要求包括：资金必须来自与销售合同一致的企业银行账户，不允许第三方付款。"
+        }
+      ],
+      "grade": {
+        "verdict": "INCORRECT",
+        "reasoning": "Agent 的回答中，最大订单金额是正确的，但关于外汇对冲条款的结论虽然正确，但理由不完整。Agent 没有提到外汇对冲条款只有当合同金额超过 $1,000,000 时才强制要求，这是评分要点中核心校验点之一。"
+      },
+      "error": null
+    }
+  ]
+}

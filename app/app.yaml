@@ -1,0 +1,9 @@
+# Databricks Apps 的静态部署清单，不经过 databricks.yml 的 ${var.x} 变量替换，
+# 所以这里的值必须是字面量，需与 .env 里的 MODEL_SERVING_ENDPOINT_NAME 保持一致
+# （默认值 salesduo-agent，来自命名规范第6节）。如果修改了 .env 里的这个值，
+# 这里也要同步改一下。
+command: ["streamlit", "run", "app.py"]
+env:
+  - name: MODEL_SERVING_ENDPOINT_NAME
+    value: "salesduo-agent"
+

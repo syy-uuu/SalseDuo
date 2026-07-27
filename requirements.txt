@@ -1,0 +1,13 @@
+databricks-sdk>=0.40.0
+databricks-connect>=15.4.0
+databricks-ai-search>=0.1.0
+databricks-langchain>=0.3.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+mlflow>=2.18.0
+azure-core>=1.30.0
+azure-storage-file-datalake>=12.14.0
+python-docx>=1.1.0
+python-dotenv>=1.0.1
+pydantic>=2.7.0
+pytest>=8.0.0
