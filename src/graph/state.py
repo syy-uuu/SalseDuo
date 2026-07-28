@@ -47,7 +47,11 @@ class AgentState(TypedDict, total=False):
 
 # router/finalize 都要把"之前聊过什么"纳入 LLM 上下文，逻辑抽成共享函数放这里，避免
 # 两个节点各写一份、容易改一处漏一处。
-_MAX_HISTORY_MESSAGES = 6  # 最近 3 轮问答（不含当前这一句），控制 prompt 不无限变长
+_MAX_HISTORY_MESSAGES = 10  # 最近 5 轮问答（不含当前这一句），控制 prompt 不无限变长
+# 这个数字本身没有严格推导过，是个合理默认值，不是调出来的最优值——见
+# docs/CODE_REVIEW_FINDINGS.md 第 10 条：跟 Genie 自己的会话记忆窗口（多大、能记多久
+# 完全不透明，看不到也控制不了）不是同一个尺度，两层记忆"能记多远"不一致的风险依然存在，
+# 从 3 轮调到 5 轮只是缓解，不是解决。
 
 
 def recent_history_text(state: AgentState) -> str:

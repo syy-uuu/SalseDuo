@@ -9,8 +9,8 @@
 当时的真实路径,反映的是目录重构前的结构,不做追溯性修改;8 条之后新增的发现用的是重构后
 的当前路径。统一的当前路径参照 `docs/REPOSITORY_STRUCTURE.md`。
 
-**修复状态总览(最近一次核对:2026-07-28)**:1、2、5、11 已修复;3、4、7 待修复;6 延后不修;
-8、9、10 是 2026-07-28 那轮新发现,待修复。
+**修复状态总览(最近一次核对:2026-07-28)**:1、2、3、5、8、11 已修复;10 部分缓解(未解决
+根本问题);4、7、9 用户明确决定暂不修(个人练习项目/附加功能,理由见各条);6 延后不修。
 
 ---
 
@@ -68,7 +68,7 @@ test_multi_turn_memory_reuses_genie_conversation_and_resolves_pronouns`（2 次�
 
 ---
 
-## 3.【待修复】unstructured_agent 在多跳场景里,检索用的 query 永远不变
+## 3.【已修复,2026-07-28】unstructured_agent 在多跳场景里,检索用的 query 永远不变
 
 **现象**:`unstructured_agent.py` 里 `query = state.get("user_query", "")`,不管这是第几次
 被路由进来、不管 router 这次为什么又把它派过来(`router_reason` 完全没被用上),检索字符串
@@ -81,9 +81,18 @@ unstructured 时,大概率检索到跟第一次相同的 chunk,查不到新信�
 又派过来)和已有的 `structured_result`(如果有)拼进检索文本,让第二次检索的 query 实际上
 携带了"这次具体还缺什么"的信息,而不是重复第一次的原始问题。
 
+**已按上述方案实现**:[src/graph/unstructured_agent.py](src/graph/unstructured_agent.py) 新增
+`_build_query()`,把 `user_query`/`router_reason`/`structured_result` 按顺序拼成检索文本,
+`unstructured_agent_node` 从 `_build_query(state)` 取 query,不再直接用 `user_query`。
+离线单测(`tests/test_unstructured_agent_query.py`,4 个用例全部通过)见
+`tests/eval/results/items_3_8_verification_20260728.md`;没有做额外的实时检索质量对比
+(需要真的触发多跳场景才能观察到区别,不在这次离线验证范围内)。
+
 ---
 
-## 4.【待修复】没有整体请求超时,只有循环次数上限
+## 4.【用户决定暂不修,2026-07-28】没有整体请求超时,只有循环次数上限
+
+**用户决定**:个人练习项目,没有真实用户在用,不考虑这个风险,暂不修。
 
 **现象**:Genie 单次调用最多轮询 300 秒(`genie_client.py` 的 `_POLL_TIMEOUT_SECONDS`),
 `MAX_ROUTER_LOOPS=5` 意味着最坏情况一次用户提问要连续调 5 次 Genie/Vector Search——理论
@@ -126,7 +135,9 @@ unstructured 时,大概率检索到跟第一次相同的 chunk,查不到新信�
 
 ---
 
-## 7.【待修复】ingest_docs.py 手工拼接转义 SQL,不是参数化查询
+## 7.【用户决定暂不修,2026-07-28】ingest_docs.py 手工拼接转义 SQL,不是参数化查询
+
+**用户决定**:个人练习项目,输入源可信,不构成真实注入风险,暂不修。
 
 **现象**:`create_and_populate_delta_table` 用 `_escape()` 手动转义单引号后,把文档切块内容
 直接拼进 `INSERT ... VALUES (...)` 语句字符串里。当前输入源可信(本地 docx 解析出的文本),
@@ -142,7 +153,7 @@ unstructured 时,大概率检索到跟第一次相同的 chunk,查不到新信�
 
 ---
 
-## 8.【待修复,2026-07-28 新发现】App 把后端调用失败的错误信息当成"assistant"消息存进对话历史
+## 8.【已修复,2026-07-28】App 把后端调用失败的错误信息当成"assistant"消息存进对话历史
 
 **现象**:[app/app.py:87-93](app/app.py#L87-L93):
 ```python
@@ -165,9 +176,17 @@ ConnectionError(...)"这样的 assistant 消息混进去,可能让后续几轮�
 本次页面渲染的错误提示(比如用 `st.error(...)` 单独展示),不写入会被发回后端的
 `st.session_state.history`。
 
+**已按上述方案实现**:[app/app.py](app/app.py) 把 `try/except` 改成 `try/except/else`——
+成功时才 `st.markdown(answer)` + append 进 `st.session_state.history`;失败时只
+`st.error(f"调用后端出错: {exc}")` 展示这一次,不碰 `history`,下一轮请求不会带上这条
+错误信息。离线单测(`tests/test_app_error_handling.py`,3 个用例全部通过,含"失败后紧接着
+成功一轮"的场景)见 `tests/eval/results/items_3_8_verification_20260728.md`。
+
 ---
 
-## 9.【待修复,2026-07-28 新发现】聊天框没有"开始新对话"的入口
+## 9.【用户决定暂不修,2026-07-28】聊天框没有"开始新对话"的入口
+
+**用户决定**:附加功能,不是缺陷,先不修。
 
 **现象**:`st.session_state.genie_conversation_id` 一旦在某一轮被设置,会在整个浏览器
 会话生命周期内一直复用(见 [app/app.py:88-89](app/app.py#L88-L89)),没有任何 UI 元素或
@@ -181,7 +200,7 @@ router/finalize 仍然会带着之前的对话上下文去理解新问题,可能
 
 ---
 
-## 10.【待修复,2026-07-28 新发现】"最近几轮"历史窗口和 Genie 自己的会话记忆窗口不是同一个尺度
+## 10.【部分缓解,2026-07-28】"最近几轮"历史窗口和 Genie 自己的会话记忆窗口不是同一个尺度
 
 **现象**:[src/graph/state.py](src/graph/state.py) 的 `recent_history_text()` 只截取
 最近 `_MAX_HISTORY_MESSAGES=6` 条消息喂给 router/finalize;但 `genie_conversation_id`
@@ -197,6 +216,12 @@ Genie 可能还记得第 1 轮提到的某个客户,但 router/finalize 只能�
 `_MAX_HISTORY_MESSAGES` 调大到接近 Genie 实际会记住的量级(需要先搞清楚 Genie 自己的
 会话记忆窗口有多大,目前没有相关文档)。这个问题在验证阶段(2 轮对话)没有被触发,是分析
 设计时发现的潜在风险,不是实测复现的 bug。
+
+**已部分处理**:[src/graph/state.py](src/graph/state.py) 的 `_MAX_HISTORY_MESSAGES` 从
+6(3 轮)调到 10(5 轮)——这只是把窗口调大缓解问题出现的概率,**不是方向 (a)/(b) 里任何
+一个的真正实现**,两层记忆窗口本身仍然不是同一个尺度,只是"不一致"这件事变得没那么容易
+触发。根本解决(强制对齐 conversation_id,或者先搞清楚 Genie 自己的记忆窗口有多大再对齐
+`_MAX_HISTORY_MESSAGES`)仍然没有做,继续按【待修复】对待。
 
 ---
 

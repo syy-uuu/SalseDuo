@@ -88,6 +88,11 @@ if question:
                 answer, genie_conversation_id = ask(st.session_state.history)
                 st.session_state.genie_conversation_id = genie_conversation_id
             except Exception as exc:  # noqa: BLE001 - 聊天框需要把后端错误直接展示给用户
-                answer = f"调用后端出错: {exc}"
-        st.markdown(answer)
-    st.session_state.history.append({"role": "assistant", "content": answer})
+                # 失败时只在本次渲染里提示，不写进 history——history 会被发回后端当上下文，
+                # 一条"调用后端出错: ConnectionError(...)"混进去会被 router/finalize 当成
+                # "之前 agent 说过的话"去理解，产生不可预测的干扰（见
+                # docs/CODE_REVIEW_FINDINGS.md 第 8 条）。
+                st.error(f"调用后端出错: {exc}")
+            else:
+                st.markdown(answer)
+                st.session_state.history.append({"role": "assistant", "content": answer})

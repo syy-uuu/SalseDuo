@@ -116,7 +116,7 @@ def deploy_serving_endpoint(model_version: str) -> None:
     served_entity = ServedEntityInput(
         entity_name=registered_model_name,
         entity_version=model_version,
-        workload_size="Small",
+        workload_size="Large",
         scale_to_zero_enabled=True,
         environment_vars=_serving_environment_vars(),
     )
