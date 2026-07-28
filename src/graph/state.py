@@ -6,6 +6,8 @@ import operator
 from typing import Literal, TypedDict
 from typing_extensions import Annotated
 
+from prompts.loader import render_prompt
+
 NextStep = Literal["structured", "unstructured", "finalize"]
 
 
@@ -41,3 +43,23 @@ class AgentState(TypedDict, total=False):
     # Annotated + operator.add：每个节点返回只包含"自己这一步"的单元素列表，
     # LangGraph 会自动累加合并，不需要每个节点手动读出历史再拼接。
     trace: Annotated[list[TraceStep], operator.add]
+
+
+# router/finalize 都要把"之前聊过什么"纳入 LLM 上下文，逻辑抽成共享函数放这里，避免
+# 两个节点各写一份、容易改一处漏一处。
+_MAX_HISTORY_MESSAGES = 6  # 最近 3 轮问答（不含当前这一句），控制 prompt 不无限变长
+
+
+def recent_history_text(state: AgentState) -> str:
+    """把 messages 里"当前这句之前"的历史，格式化成一段可以直接拼进 prompt 的文本。
+    没有历史（第一轮提问）时返回空字符串。
+
+    约定：调用方（agent.py::_run_graph / chat.py）负责把当前这句用户提问作为
+    messages 的最后一条再传进 initial_state，这里固定只取 messages[:-1]，不用自己判断
+    "哪条是当前这句"。"""
+    messages = state.get("messages") or []
+    history = messages[:-1][-_MAX_HISTORY_MESSAGES:]
+    if not history:
+        return ""
+    lines = [f"{m['role']}: {m['content']}" for m in history]
+    return render_prompt("history_framing") + "\n" + "\n".join(lines)

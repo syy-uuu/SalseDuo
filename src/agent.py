@@ -39,12 +39,26 @@ class SalesDuoResponsesAgent(ResponsesAgent):
         user_query = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
         )
+        # 跨轮对话记忆：messages 里"当前这句之前"的历史由调用方（app.py）在 request.input
+        # 里整段发过来（见 src/graph/state.py::recent_history_text，router/finalize 从
+        # messages 里取历史，不是从这里单独传）。genie_conversation_id 不属于标准的
+        # messages 格式，走 custom_inputs 单独传——调用方把上一轮 custom_outputs 里收到的
+        # 值原样带回来，用来复用同一个 Genie 会话，不让每句新消息都变成 Genie 的新会话。
+        custom_inputs = request.custom_inputs or {}
         initial_state = {
             "messages": messages,
             "user_query": user_query,
             "loop_count": 0,
+            "genie_conversation_id": custom_inputs.get("genie_conversation_id"),
         }
         return self._graph.invoke(initial_state)
+
+    @staticmethod
+    def _custom_outputs(result: dict) -> dict:
+        return {
+            "trace": result.get("trace", []),
+            "genie_conversation_id": result.get("genie_conversation_id"),
+        }
 
     @staticmethod
     def _final_text(result: dict) -> str:
@@ -60,8 +74,9 @@ class SalesDuoResponsesAgent(ResponsesAgent):
         # custom_outputs 里带上完整白盒 trace（router 判断、Genie SQL、检索片段）——
         # 部署到 Serving 之后，本地就没法直接看 graph.invoke() 的返回值了，这是唯一能
         # 在线上环境追查"这次为什么没查到数据"这类问题的办法，不是可有可无的调试糖。
+        # 同时带上 genie_conversation_id，供调用方下一轮通过 custom_inputs 传回来延续会话。
         return ResponsesAgentResponse(
-            output=[output_item], custom_outputs={"trace": result.get("trace", [])}
+            output=[output_item], custom_outputs=self._custom_outputs(result)
         )
 
     def predict_stream(
@@ -74,7 +89,7 @@ class SalesDuoResponsesAgent(ResponsesAgent):
         yield ResponsesAgentStreamEvent(
             type="response.output_item.done",
             item=self.create_text_output_item(text=final_text, id=item_id),
-            custom_outputs={"trace": result.get("trace", [])},
+            custom_outputs=self._custom_outputs(result),
         )
 
 

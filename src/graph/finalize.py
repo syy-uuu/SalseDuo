@@ -4,20 +4,21 @@ from __future__ import annotations
 
 from src.config import settings
 from src.clients.llm import get_llm
-from src.graph.state import AgentState
+from src.graph.state import AgentState, recent_history_text
+from prompts.loader import render_prompt
 
-_SYSTEM_PROMPT = """\
-你是 Adventure Works Cycles 的业务助手。基于下面收集到的中间结果，用简洁、准确的中文
-回答用户的问题。如果某些信息缺失或循环次数已达上限导致信息可能不完整，请在回答末尾如实
-说明这一点，不要编造未获得的数据。
-"""
+_SYSTEM_PROMPT = render_prompt("finalize")
 
 
 def finalize_node(state: AgentState) -> AgentState:
     loop_count = state.get("loop_count", 0)
     hit_loop_limit = loop_count >= settings.max_router_loops
 
-    context_parts = [f"用户问题: {state.get('user_query', '')}"]
+    context_parts = []
+    history = recent_history_text(state)
+    if history:
+        context_parts.append(history)
+    context_parts.append(f"用户问题: {state.get('user_query', '')}")
     if state.get("credit_info"):
         context_parts.append(f"政策文档检索结果: {state['credit_info']}")
     if state.get("business_rule_result"):

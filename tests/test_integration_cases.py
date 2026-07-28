@@ -65,3 +65,36 @@ def test_multi_hop_credit_then_structured_question():
 def test_loop_count_never_exceeds_configured_max():
     result = _run("一个故意模糊、可能导致反复判断信息不够的问题")
     assert result.get("loop_count", 0) <= settings.max_router_loops
+
+
+def test_multi_turn_memory_reuses_genie_conversation_and_resolves_pronouns():
+    """2026-07-28 补的多轮记忆：同一个 genie_conversation_id 要跨轮复用，且第二轮
+    里的代词（"他们"）要能借助历史正确指代第一轮问的客户，不需要用户重新报一遍
+    客户名。设计方法论见 docs/AGENT_MEMORY_DESIGN.md。"""
+    graph = build_graph()
+
+    q1 = "客户 Bike World 的年采购额是多少？"
+    result1 = graph.invoke(
+        {"messages": [{"role": "user", "content": q1}], "user_query": q1, "loop_count": 0}
+    )
+    genie_cid_1 = result1.get("genie_conversation_id")
+    assert genie_cid_1, "第一轮应该已经产生一个 genie_conversation_id"
+
+    q2 = "那他们的信用额度上限是多少？"
+    messages = result1["messages"] + [{"role": "user", "content": q2}]
+    result2 = graph.invoke(
+        {
+            "messages": messages,
+            "user_query": q2,
+            "genie_conversation_id": genie_cid_1,
+            "loop_count": 0,
+        }
+    )
+    assert result2.get("genie_conversation_id") == genie_cid_1, (
+        "第二轮应该复用同一个 genie_conversation_id，不应该开新的 Genie 会话"
+    )
+    # 第二轮问题里没有再提"Bike World"——如果历史没生效，router/finalize 拿到的只是
+    # 一句孤立的"那他们的信用额度上限是多少"，大概率会直接说不知道是哪个客户，走不到
+    # 结构化查询这一步；这里断言确实产生了结构化查询/业务规则结果，作为"理解了指代"
+    # 的间接证据（不断言具体金额，LLM 生成的自然语言措辞不适合做精确字符串匹配）。
+    assert result2.get("structured_result") or result2.get("business_rule_result")

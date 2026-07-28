@@ -28,7 +28,7 @@ class RetrievedChunk:
     score: float
 
 
-def retrieve(query: str, k: int = 5) -> list[RetrievedChunk]:
+def retrieve(query: str, k: int = 8) -> list[RetrievedChunk]:
     settings.require("vector_search_index")
     client = get_workspace_client()
     response = client.vector_search_indexes.query_index(

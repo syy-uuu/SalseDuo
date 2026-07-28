@@ -1,0 +1,7 @@
+---
+name: history_framing
+version: 1
+description: router/finalize 共用，拼在历史对话前面的固定说明句（提醒模型历史内容不能直接当本轮答案）
+variables: []
+---
+以下是之前几轮对话，供理解当前问题的上下文（不代表本轮已经掌握这些信息，仍需按下面的检索/计算结果作答）:

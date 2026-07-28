@@ -42,45 +42,18 @@ import uuid
 
 from src.config import settings
 from src.db_client import get_workspace_client
+from prompts.loader import render_prompt
 
 def _build_instructions() -> str:
     # UC Function 无法通过 UI 之外的方式挂载为 Genie "工具"（见模块顶部说明），
     # Genie 生成 SQL 时如果只写函数短名会因为不在 search path 里而报
     # UNRESOLVED_ROUTINE。这里直接把全限定名写进 instructions文本，让 Genie
     # 在生成的 SQL 里总是用全限定名调用，不依赖"挂载为工具"这个失效的机制。
-    fn_schema = f"{settings.uc_catalog}.{settings.uc_function_schema}"
-    sales_schema = f"{settings.uc_catalog}.{settings.uc_schema_sales}"
-    return f"""\
-你可以查询 AdventureWorksLT 的销售(sales)与客户(person)相关表来回答问题。
-
-重要的表关联路径（不要跳过 customer 表直接把 store 和 salesorderheader 关联起来，
-这是一个常见的关联错误，会导致查出空结果或算错采购额/合作年限）：
-{sales_schema}.store.businessentityid = {sales_schema}.customer.storeid
-{sales_schema}.customer.customerid = {sales_schema}.salesorderheader.customerid
-也就是说，从店铺名找订单必须经过 customer 表做中间关联，正确路径是：
-store -> customer (ON customer.storeid = store.businessentityid) -> salesorderheader
-(ON salesorderheader.customerid = customer.customerid)。
-
-当问题涉及信用额度、账期、大额交易结算合规等业务规则计算时，
-不要自己拼 SQL 硬算规则，而是在生成的 SQL 里调用以下 UC Function
-（必须使用完整的三段式全限定名，不要只写函数名，否则会报 UNRESOLVED_ROUTINE；
-两个函数都返回一个 STRUCT，字段名必须严格按下面列出的拼写，不要猜测或改写字段名）：
-
-- {fn_schema}.calculate_credit_terms(relationship_years DOUBLE, annual_purchase_volume_usd DOUBLE, board_approved_strategic_partner BOOLEAN DEFAULT FALSE, requested_credit_amount_usd DOUBLE DEFAULT 0, requested_term_days INT DEFAULT NULL)
-  用途：计算客户信用分级、账期、信用额度上限及超限审批要求。
-  这是标量函数（SCALAR，不是表函数/TABLE FUNCTION），只能出现在 SELECT 的列表达式里
-  （比如 SELECT {fn_schema}.calculate_credit_terms(...).tier），不能写在 FROM/LATERAL
-  子句里当表来用，否则会报 NOT_A_TABLE_FUNCTION。
-  返回 STRUCT 字段：tier, advance_payment_min_pct, advance_payment_max_pct, max_credit_term_days, max_credit_limit_usd, exceeds_credit_limit, overage_pct, requires_net90_escalation, required_approval
-
-- {fn_schema}.check_large_transaction_compliance(settlement_method STRING, transaction_amount_usd DOUBLE, settlement_currency STRING DEFAULT 'USD', contract_duration_years DOUBLE DEFAULT 0)
-  用途：校验大额交易结算方式的合规状态与外汇对冲要求。settlement_method 取值只能是 WIRE_TRANSFER / LETTER_OF_CREDIT / BANK_ACCEPTANCE_DRAFT / CORPORATE_CHEQUE 之一。
-  返回 STRUCT 字段：compliance_status, settlement_allowed, required_controls, currency_approved, fx_hedging_clause_required
-
-写 SQL 时间函数注意，这两个函数的时间单位写法不一样，不要混用：
-- DATEDIFF 的时间单位要用不加引号的关键字：DATEDIFF(YEAR, start, end)
-- DATE_TRUNC 的时间单位要用加引号的字符串：DATE_TRUNC('YEAR', some_date)
-"""
+    return render_prompt(
+        "genie_instructions",
+        fn_schema=f"{settings.uc_catalog}.{settings.uc_function_schema}",
+        sales_schema=f"{settings.uc_catalog}.{settings.uc_schema_sales}",
+    )
 
 # Genie Space 应该挂载的完整表清单，显式列在这里（不是"默认已有 + 追加几张"，是这个
 # Space 应该有的全部表）——每次运行都会跟当前实际挂载的表做差集，缺的补上，已有的跳过，

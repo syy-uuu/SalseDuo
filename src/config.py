@@ -98,9 +98,9 @@ class Settings:
             )
 
     def __post_init__(self) -> None:
-        # 不是所有代码路径都经过 src/db_client.py 拿 WorkspaceClient——比如
-        # databricks.ai_search.client.VectorSearchClient 内部走的是 mlflow 自己的凭据
-        # 解析逻辑，会新建一个不带任何参数的 WorkspaceClient()，根本不知道
+        # 不是所有代码路径都经过 src/db_client.py 拿 WorkspaceClient——比如 mlflow 自己的
+        # mlflow.utils.databricks_utils.get_databricks_host_creds()（tracking/registry
+        # 相关调用内部会走到这里）会新建一个不带任何参数的 WorkspaceClient()，根本不知道
         # AZURE_SUBSCRIPTION_ID/RESOURCE_GROUP_NAME/DATABRICKS_WORKSPACE_NAME 这三个自定义
         # 变量的存在。databricks-sdk 官方认的是 DATABRICKS_AZURE_RESOURCE_ID 这个环境变量
         # （任何裸 WorkspaceClient() 都会自动读它），这里把拼好的资源 ID 写回这个环境变量，

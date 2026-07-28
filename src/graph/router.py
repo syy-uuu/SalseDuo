@@ -13,22 +13,10 @@ from pydantic import BaseModel, Field
 
 from src.config import settings
 from src.clients.llm import get_llm
-from src.graph.state import AgentState, NextStep
+from src.graph.state import AgentState, NextStep, recent_history_text
+from prompts.loader import render_prompt
 
-_SYSTEM_PROMPT = """\
-你是一个负责路由决策的调度器。任务是判断:要回答用户的问题,当前掌握的信息是否已经足够,
-如果不够,下一步应该查询"非结构化文档"(公司信用/合规政策规则)还是"结构化数据库"
-(AdventureWorksLT 销售/客户数据,以及信用/合规业务规则计算的 UC Function)。
-
-判断原则:
-- 如果问题涉及信用额度、账期、大额交易结算合规等规则,但还没有检索过政策文档,先查非结构化。
-- 如果已经拿到政策规则/参数,但还需要具体客户的交易数据、订单历史、金额等,查结构化数据
-  (Genie 会在需要时调用挂载的 UC Function 完成规则计算)。
-- 如果规则计算结果依赖的某个参数其实来自另一份政策文档(例如先算完信用条款,又发现需要
-  确认结算方式合规性),可以再次回到非结构化查询。
-- 如果已经有了回答用户问题所需的全部信息,选择 finalize。
-- 不要无意义地重复相同的查询。
-"""
+_SYSTEM_PROMPT = render_prompt("router")
 
 
 class RouterDecision(BaseModel):
@@ -102,7 +90,11 @@ def router_node(state: AgentState) -> AgentState:
 
 
 def _render_context(state: AgentState) -> str:
-    parts = [f"用户问题: {state.get('user_query', '')}"]
+    parts = []
+    history = recent_history_text(state)
+    if history:
+        parts.append(history)
+    parts.append(f"用户问题: {state.get('user_query', '')}")
     if state.get("credit_info"):
         parts.append(f"已检索到的政策/规则原文: {state['credit_info']}")
     if state.get("business_rule_result"):

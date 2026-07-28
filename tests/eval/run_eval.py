@@ -16,20 +16,13 @@ from pydantic import BaseModel, Field
 
 from src.clients.llm import get_llm
 from src.graph.build_graph import build_graph
+from prompts.loader import render_prompt
 
 _EVAL_DIR = Path(__file__).parent
 _EVAL_SET_PATH = _EVAL_DIR / "eval_set.json"
 _RESULTS_DIR = _EVAL_DIR / "results"
 
-_GRADER_SYSTEM_PROMPT = """\
-你是一个严格的评测裁判。给你一个问题、标准答案(ground truth)、评分要点(grading notes)，
-以及 agent 的实际回答，请判断 agent 的回答是否正确。
-
-判断标准:
-- CORRECT: 关键事实/数字/结论都对，允许合理的措辞、格式、四舍五入差异。
-- PARTIALLY_CORRECT: 部分关键点对，但遗漏或搞错了至少一个评分要点里提到的核心信息。
-- INCORRECT: 关键结论/数字明显错误，或完全没有回答到点子上。
-"""
+_GRADER_SYSTEM_PROMPT = render_prompt("eval_grader")
 
 
 class Grade(BaseModel):

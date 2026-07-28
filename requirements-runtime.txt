@@ -1,6 +1,7 @@
-# 运行时依赖：只列 src/agent.py -> src/graph/*.py -> src/clients/*.py 实际 import 的包。
-# 这份文件是 ops/deploy_model.py 打包给 Model Serving 的 pip_requirements，不要往这里加
-# 只有建仓脚本（ops/）或测试才用得到的包——那些走根目录 requirements.txt。
+# 运行时依赖：只列 src/agent.py -> src/graph/*.py -> src/clients/*.py -> prompts/loader.py
+# 实际 import 的包。这份文件是 ops/deploy_model.py 打包给 Model Serving 的
+# pip_requirements，不要往这里加只有建仓脚本（ops/）或测试才用得到的包——那些走根目录
+# requirements.txt。
 databricks-sdk>=0.40.0
 databricks-langchain>=0.3.0
 langgraph>=0.2.0
@@ -8,3 +9,4 @@ langchain-core>=0.3.0
 mlflow>=2.18.0
 python-dotenv>=1.0.1
 pydantic>=2.7.0
+pyyaml>=6.0  # prompts/loader.py 解析 .prompt 文件的 frontmatter

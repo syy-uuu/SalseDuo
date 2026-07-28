@@ -34,7 +34,11 @@ _REQUIREMENTS_FILE = str(_PROJECT_ROOT / "requirements-runtime.txt")
 # agent.py 里 `from src.xxx import yyy` 这种写法，在 mlflow 把模型加载到隔离的 Serving
 # 容器里时也要能 resolve——code_paths 把整个 src/ 包一起打进模型artifact，mlflow 加载时会把
 # code_paths 的父目录（不是 code_paths 自己）加进 sys.path，所以 `src` 包能正常 import。
-_CODE_PATHS = [str(_PROJECT_ROOT / "src")]
+# 同理还要带上 prompts/：router.py/finalize.py/state.py 运行时会
+# `from prompts.loader import render_prompt` 读 prompts/*.prompt，这些文件不在 src/ 下，
+# 不会被第一条 code_paths 自动带上，漏了这一条部署上去会在加载模型那一步直接报
+# FileNotFoundError（找不到 prompts/router.prompt）。
+_CODE_PATHS = [str(_PROJECT_ROOT / "src"), str(_PROJECT_ROOT / "prompts")]
 
 
 def _resources() -> list:
