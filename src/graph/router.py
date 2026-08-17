@@ -1,10 +1,15 @@
-"""router 节点：每一步判断"继续查结构化 / 继续查非结构化 / 结束"。
+"""The router node: decides, at every step, whether to "keep querying structured data /
+keep querying unstructured data / finish".
 
-这是整个图里唯一做路由决策的节点——不做成"dispatcher 节点 + summarizer 节点"两段式，
-分派下一步和判断信息是否齐全是同一个决策动作的反复发生，用这一个节点 + 循环边实现。
+This is the only node in the whole graph that makes routing decisions — the design is
+deliberately *not* a two-stage "dispatcher node + summarizer node": deciding what to do
+next and judging whether the information gathered so far is sufficient are the same
+decision, happening repeatedly, so it's implemented as this one node plus a looping
+edge, not two roles calling each other.
 
-next_step 走强制结构化输出（Pydantic + with_structured_output），不解析自由文本，
-避免路由结果解析出错导致状态机行为不可预测。
+next_step goes through forced structured output (Pydantic + with_structured_output)
+rather than parsing free text, to avoid a routing-result parse failure making the state
+machine's behavior unpredictable.
 """
 
 from __future__ import annotations
@@ -20,14 +25,16 @@ _SYSTEM_PROMPT = render_prompt("router")
 
 
 class RouterDecision(BaseModel):
-    next_step: NextStep = Field(description="下一步动作: structured | unstructured | finalize")
-    reason: str = Field(description="做出该判断的简要理由，控制在一句话以内")
+    next_step: NextStep = Field(description="Next action: structured | unstructured | finalize")
+    reason: str = Field(description="A brief, one-sentence rationale for this decision")
 
 
-# 底层 LLM 在 reason 字段较长时，偶尔会在强制 tool-calling 格式里生成格式非法的输出
-# （多余的右括号导致 JSON 解析失败），这是模型生成质量问题，不是我们代码的 bug。
-# 用小重试兜底；重试全部失败就安全降级为 finalize，而不是让整个请求崩溃——
-# 这跟 loop_count 超限时的兜底是同一种"宁可提前结束，也不让状态机行为失控"的原则。
+# The underlying LLM occasionally emits malformed tool-calling-format JSON (a stray
+# trailing ")") when the `reason` field is longer, under forced structured output — this
+# is a model generation-quality issue, not a bug in our code, and it's reproducible, not
+# flaky. Guarded with a small retry; if all retries fail, safely degrade to finalize
+# rather than crashing the whole request — the same "better to end early than let the
+# state machine run out of control" principle used for the loop_count cap.
 _MAX_DECISION_ATTEMPTS = 3
 
 
@@ -35,7 +42,7 @@ def router_node(state: AgentState) -> AgentState:
     loop_count = state.get("loop_count", 0)
 
     if loop_count >= settings.max_router_loops:
-        reason = f"已达到路由循环上限 ({settings.max_router_loops})，强制结束。"
+        reason = f"Reached the router loop cap ({settings.max_router_loops}); forcing finish."
         return {
             **state,
             "next_step": "finalize",
@@ -58,11 +65,11 @@ def router_node(state: AgentState) -> AgentState:
         try:
             decision = llm.invoke(messages)
             break
-        except Exception as exc:  # noqa: BLE001 - 底层模型格式错误的类型不固定，广接更稳妥
+        except Exception as exc:  # noqa: BLE001 - the underlying model's format-error type isn't fixed, so catching broadly is more robust here
             last_error = exc
 
     if decision is None:
-        reason = f"路由模型连续 {_MAX_DECISION_ATTEMPTS} 次输出格式错误，安全降级为 finalize: {last_error}"
+        reason = f"The routing model produced malformed output {_MAX_DECISION_ATTEMPTS} times in a row; safely degrading to finalize: {last_error}"
         return {
             **state,
             "next_step": "finalize",
@@ -94,14 +101,14 @@ def _render_context(state: AgentState) -> str:
     history = recent_history_text(state)
     if history:
         parts.append(history)
-    parts.append(f"用户问题: {state.get('user_query', '')}")
+    parts.append(f"User question: {state.get('user_query', '')}")
     if state.get("credit_info"):
-        parts.append(f"已检索到的政策/规则原文: {state['credit_info']}")
+        parts.append(f"Policy/rule text retrieved so far: {state['credit_info']}")
     if state.get("business_rule_result"):
-        parts.append(f"已计算的业务规则结果: {state['business_rule_result']}")
+        parts.append(f"Business rule result computed so far: {state['business_rule_result']}")
     if state.get("structured_result"):
-        parts.append(f"已查询到的结构化数据结果: {state['structured_result']}")
-    parts.append(f"当前循环次数: {state.get('loop_count', 0)} / 上限 {settings.max_router_loops}")
+        parts.append(f"Structured data query result so far: {state['structured_result']}")
+    parts.append(f"Current loop count: {state.get('loop_count', 0)} / cap {settings.max_router_loops}")
     return "\n".join(parts)
 
 

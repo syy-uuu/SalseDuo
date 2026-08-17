@@ -1,12 +1,13 @@
-"""Step 5/7 衔接：把 src/agent.py 的 ResponsesAgent 记录为 MLflow Model，
-注册到 Unity Catalog，并部署为 Model Serving Endpoint（供 Databricks App 调用）。
+"""Step 5/7 handoff: logs the ResponsesAgent from src/agent.py as an MLflow Model,
+registers it in Unity Catalog, and deploys it as a Model Serving Endpoint (for the
+Databricks App to call).
 
-通过 mlflow.pyfunc.log_model(resources=[...]) 声明该 agent 运行时依赖的
-Genie Space / Vector Search Index / LLM Serving Endpoint / SQL Warehouse，
-Model Serving 会据此自动为 serving endpoint 的 service principal 授权访问这些资源，
-不需要手工在这些资源上单独配置权限。
+Declares the agent's runtime dependencies — Genie Space / Vector Search Index / LLM
+Serving Endpoint / SQL Warehouse — via mlflow.pyfunc.log_model(resources=[...]).
+Model Serving uses this to automatically grant the serving endpoint's service principal
+access to these resources, with no need to configure permissions on them by hand.
 
-用法: python -m ops.deploy_model
+Usage: python -m ops.deploy_model
 """
 
 from __future__ import annotations
@@ -27,17 +28,22 @@ from src.db_client import get_workspace_client
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _AGENT_ENTRYPOINT = str(_PROJECT_ROOT / "src" / "agent.py")
-# 只传运行时实际需要的依赖（见 docs/CODE_REVIEW_FINDINGS.md 第2条）：根目录 requirements.txt
-# 混了 databricks-connect/azure-*/python-docx/pytest 这些建仓脚本专用的重依赖，如果整份传给
-# log_model，会被原样打进 serving 容器镜像，运行时代码从来用不到，纯粹拖慢冷启动。
+# Only passes the dependencies actually needed at runtime (see
+# docs/CODE_REVIEW_FINDINGS.md item 2): the root requirements.txt mixes in heavy
+# provisioning-only dependencies (databricks-connect/azure-*/python-docx/pytest) — if
+# the whole file were passed to log_model, they'd get baked into the serving container
+# image verbatim even though the runtime code never uses them, purely slowing down cold
+# starts.
 _REQUIREMENTS_FILE = str(_PROJECT_ROOT / "requirements-runtime.txt")
-# agent.py 里 `from src.xxx import yyy` 这种写法，在 mlflow 把模型加载到隔离的 Serving
-# 容器里时也要能 resolve——code_paths 把整个 src/ 包一起打进模型artifact，mlflow 加载时会把
-# code_paths 的父目录（不是 code_paths 自己）加进 sys.path，所以 `src` 包能正常 import。
-# 同理还要带上 prompts/：router.py/finalize.py/state.py 运行时会
-# `from prompts.loader import render_prompt` 读 prompts/*.prompt，这些文件不在 src/ 下，
-# 不会被第一条 code_paths 自动带上，漏了这一条部署上去会在加载模型那一步直接报
-# FileNotFoundError（找不到 prompts/router.prompt）。
+# agent.py's `from src.xxx import yyy` style imports also need to resolve once mlflow
+# loads the model into an isolated Serving container — code_paths bundles the whole
+# src/ package into the model artifact, and at load time mlflow adds code_paths'
+# *parent* directory (not code_paths itself) to sys.path, so the `src` package imports
+# correctly. For the same reason prompts/ also needs to be included: router.py/
+# finalize.py/state.py do `from prompts.loader import render_prompt` at runtime to read
+# prompts/*.prompt, and those files live outside src/, so they wouldn't be picked up by
+# the first code_paths entry automatically — missing this causes a FileNotFoundError
+# (can't find prompts/router.prompt) as soon as the model tries to load once deployed.
 _CODE_PATHS = [str(_PROJECT_ROOT / "src"), str(_PROJECT_ROOT / "prompts")]
 
 
@@ -63,10 +69,12 @@ def _registered_model_name() -> str:
 
 
 def log_and_register_model() -> str:
-    # 不显式指定的话，本地跑（不在 Databricks notebook/job 里）时 mlflow 会默认写到本地
-    # SQLite（项目目录下的 mlflow.db + mlruns/），而不是真正写到 Databricks workspace——
-    # 之前踩过这个坑：本地"注册成功"，但 Databricks 那边 serving_endpoints.create 一查
-    # 说模型不存在，因为压根不在同一个地方。
+    # Without setting this explicitly, running locally (outside a Databricks
+    # notebook/job) makes mlflow default to writing to a local SQLite DB
+    # (mlflow.db + mlruns/ under the project directory) instead of the real Databricks
+    # workspace — hit this exact issue before: the model "registered successfully"
+    # locally, but Databricks' serving_endpoints.create then said the model didn't
+    # exist, because it was never actually written there in the first place.
     mlflow.set_tracking_uri("databricks")
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_experiment(settings.mlflow_experiment_path)
@@ -80,15 +88,17 @@ def log_and_register_model() -> str:
             resources=_resources(),
             registered_model_name=registered_model_name,
         )
-    print(f"已注册模型: {registered_model_name} version {model_info.registered_model_version}")
+    print(f"Registered model: {registered_model_name} version {model_info.registered_model_version}")
     return model_info.registered_model_version
 
 
 def _serving_environment_vars() -> dict:
-    # 被 serve 的模型跑在隔离容器里，没有本地的 .env 文件——config.py 读的这些非密钥配置项
-    # 必须显式作为 serving endpoint 的环境变量传进去，模型运行时才能读到。
-    # 不传 DATABRICKS_HOST/DATABRICKS_TOKEN：认证走 log_model 时声明的 resources 自动鉴权，
-    # 不需要（也不应该）把 token 明文塞进 serving 配置里。
+    # The served model runs in an isolated container with no local .env file — these
+    # non-secret config values that config.py reads must be passed in explicitly as
+    # serving endpoint environment variables so the model can read them at runtime.
+    # DATABRICKS_HOST/DATABRICKS_TOKEN are intentionally omitted: auth is handled
+    # automatically via the resources declared to log_model — there's no need (and it
+    # would be a bad idea) to put a token in plaintext in the serving config.
     return {
         "UC_CATALOG": settings.uc_catalog,
         "UC_SCHEMA_SALES": settings.uc_schema_sales,
@@ -127,13 +137,13 @@ def deploy_serving_endpoint(model_version: str) -> None:
         client.serving_endpoints.update_config_and_wait(
             name=endpoint_name, served_entities=[served_entity]
         )
-        print(f"已更新 serving endpoint: {endpoint_name} -> version {model_version}")
+        print(f"Updated serving endpoint: {endpoint_name} -> version {model_version}")
     else:
         client.serving_endpoints.create_and_wait(
             name=endpoint_name,
             config=EndpointCoreConfigInput(name=endpoint_name, served_entities=[served_entity]),
         )
-        print(f"已创建 serving endpoint: {endpoint_name} -> version {model_version}")
+        print(f"Created serving endpoint: {endpoint_name} -> version {model_version}")
 
 
 def main() -> None:
@@ -148,7 +158,7 @@ def main() -> None:
     )
     model_version = log_and_register_model()
     deploy_serving_endpoint(model_version)
-    print("Step 7 模型注册与 Serving Endpoint 部署完成。")
+    print("Step 7 model registration and Serving Endpoint deployment complete.")
 
 
 if __name__ == "__main__":

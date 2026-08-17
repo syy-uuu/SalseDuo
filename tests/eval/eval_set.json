@@ -2,71 +2,71 @@
   {
     "id": "structured_1",
     "category": "structured_only",
-    "question": "Brakes and Gears 这家店一共下过多少笔订单？总金额是多少？",
-    "ground_truth": "12 笔订单，总金额约 $989,184.08 美元。",
-    "grading_notes": "直接查 adventureworks_dataagent.sales.store/customer/salesorderheader 即可得到，不需要查政策文档。核心校验点：订单数=12，总金额≈989184（允许合理的四舍五入误差）。数据来源: 2026-07-25 通过 SQL warehouse 直接查询验证。"
+    "question": "How many orders has the store Brakes and Gears placed in total? What's the total amount?",
+    "ground_truth": "12 orders, total amount approximately $989,184.08.",
+    "grading_notes": "Directly queryable from adventureworks_dataagent.sales.store/customer/salesorderheader, no need to consult policy documents. Core check points: order count = 12, total amount ≈ 989184 (reasonable rounding error allowed). Data source: verified 2026-07-25 via a direct SQL warehouse query."
   },
   {
     "id": "structured_2",
     "category": "structured_only",
-    "question": "First Bike Store 首次下单日期是哪一天？",
-    "ground_truth": "2022-05-30。",
-    "grading_notes": "直接查 salesorderheader 里该客户最早的 orderdate，不需要查政策文档。核心校验点：日期为 2022-05-30（月份/年份需完全对，日可容忍格式差异）。"
+    "question": "What date did First Bike Store place its first order?",
+    "ground_truth": "2022-05-30.",
+    "grading_notes": "Directly queryable as this customer's earliest orderdate in salesorderheader, no need to consult policy documents. Core check point: the date is 2022-05-30 (month/year must match exactly; day formatting differences are tolerable)."
   },
   {
     "id": "unstructured_1",
     "category": "unstructured_only",
-    "question": "Tier 1 Strategic Partner 客户的账期是多少天？需要多少预付款？",
-    "ground_truth": "账期 Net 90 天，预付款要求为 0%（Advance Payment Required: 0% Advance Required）。",
-    "grading_notes": "直接来自 AW_Corporate_Credit_and_Payment_Terms_Policy.docx 第2节客户分级矩阵，不需要查任何结构化数据。核心校验点：90天 + 0%预付款两个数字都要对。"
+    "question": "What is the payment term, in days, for a Tier 1 Strategic Partner customer? How much advance payment is required?",
+    "ground_truth": "Payment term is Net 90 days, advance payment requirement is 0% (Advance Payment Required: 0% Advance Required).",
+    "grading_notes": "Comes directly from the customer tiering matrix in section 2 of AW_Corporate_Credit_and_Payment_Terms_Policy.docx, no structured data needed. Core check points: both the 90-day figure and the 0% advance payment figure must be correct."
   },
   {
     "id": "unstructured_2",
     "category": "unstructured_only",
-    "question": "如果客户信用额度超限比例超过15%，需要谁签字批准？",
-    "ground_truth": "需要 VP of Sales（销售副总裁）背书，并由 CFO（首席财务官）最终签字批准（原文：detailed commercial justification via the Corporate Risk Assessment Portal, endorsed by the VP of Sales, and finalized via explicit sign-off from the Chief Financial Officer）。",
-    "grading_notes": "直接来自 AW_Corporate_Credit_and_Payment_Terms_Policy.docx 第3节例外审批流程，不需要查任何结构化数据。核心校验点：必须同时提到 VP of Sales 和 CFO 两个角色，缺一不算完全正确。"
+    "question": "If a customer's credit limit overage exceeds 15%, who needs to sign off on approval?",
+    "ground_truth": "Requires endorsement from the VP of Sales, with final sign-off approval from the CFO (Chief Financial Officer) (original text: detailed commercial justification via the Corporate Risk Assessment Portal, endorsed by the VP of Sales, and finalized via explicit sign-off from the Chief Financial Officer).",
+    "grading_notes": "Comes directly from the exception approval workflow in section 3 of AW_Corporate_Credit_and_Payment_Terms_Policy.docx, no structured data needed. Core check point: both the VP of Sales and CFO roles must be mentioned; missing either one means it's not fully correct."
   },
   {
     "id": "multi_hop_1",
     "category": "multi_hop",
-    "question": "Brakes and Gears 这家店从首次下单到现在合作了大约多久？按照公司信用政策，这样的合作年限和采购规模能定级到哪个客户分级？对应的最高信用额度和账期分别是多少？",
-    "ground_truth": "首次下单 2022-06-30，距今(2026-07-25)约 4 年。该店总采购额约 $989,184（约 3 年订单周期内），未超过 Tier 2 所需的年采购额 > $1,000,000 门槛，因此应定级为 Tier 3 Standard Account：最高信用额度 $250,000 美元，账期 Net 45 天，预付款 0%-10%（视审核情况）。",
-    "grading_notes": "需要先查 sales 表算出该客户首次下单日期和历史采购总额（结构化），再结合信用政策矩阵（非结构化）判断分级和条款（可能还需调用 calculate_credit_terms 函数验证）。核心校验点：分级=Tier 3，最高额度=$250,000，账期=Net 45天。年采购额无论按'总额'还是'年均'解读都低于$1M门槛，结论对两种解读都稳健。"
+    "question": "Roughly how long has the store Brakes and Gears been a customer, from its first order to now? Per company credit policy, what tier does that length of relationship and purchase volume qualify it for? What are the corresponding maximum credit limit and payment term?",
+    "ground_truth": "First order 2022-06-30, roughly 4 years ago (as of 2026-07-25). The store's total purchase volume is about $989,184 (over roughly a 3-year order history), which does not exceed the > $1,000,000 annual purchase volume threshold required for Tier 2, so it should be classified as Tier 3 Standard Account: maximum credit limit $250,000, payment term Net 45 days, advance payment 0%-10% (depending on review).",
+    "grading_notes": "Requires first querying the sales tables to compute this customer's first order date and total historical purchase volume (structured), then applying the credit policy matrix (unstructured) to determine the tier and terms (may also involve calling the calculate_credit_terms function). Core check points: tier = Tier 3, max limit = $250,000, payment term = Net 45 days. The annual purchase volume is below the $1M threshold whether read as a 'total' or an 'annual average', so the conclusion is robust either way."
   },
   {
     "id": "multi_hop_2",
     "category": "multi_hop",
-    "question": "如果 Brakes and Gears 申请 30 万美元的信用额度，是否超过其分级允许的上限？如果超限，超限比例是多少？需要谁审批？",
-    "ground_truth": "Brakes and Gears 是 Tier 3 Standard Account，最高信用额度 $250,000。申请 $300,000 超过上限，超限比例 = (300000-250000)/250000 = 20%。因为超限比例超过15%，需要 VP of Sales 背书 + CFO 最终签字批准（VP_SALES_AND_CFO_SIGNOFF）。",
-    "grading_notes": "需要先确定该客户的分级/额度上限（结构化查询+规则计算），再应用信用政策里的超限审批规则（非结构化文档）。核心校验点：超限=是，超限比例=20%，审批方=VP of Sales + CFO。"
+    "question": "If Brakes and Gears applies for a $300,000 credit limit, does it exceed the maximum allowed by its tier? If so, by what percentage, and who needs to approve it?",
+    "ground_truth": "Brakes and Gears is a Tier 3 Standard Account, with a maximum credit limit of $250,000. The $300,000 request exceeds the cap, by an overage of (300000-250000)/250000 = 20%. Since the overage exceeds 15%, it needs endorsement from the VP of Sales plus final sign-off from the CFO (VP_SALES_AND_CFO_SIGNOFF).",
+    "grading_notes": "Requires first determining this customer's tier/credit limit cap (structured query + rule computation), then applying the credit policy's overage-approval rule (unstructured document). Core check points: exceeds limit = yes, overage percentage = 20%, approvers = VP of Sales + CFO."
   },
   {
     "id": "multi_hop_3",
     "category": "multi_hop",
-    "question": "First Bike Store 从首次下单到现在合作了多久？按信用政策，这样的客户可以申请到的最高信用额度和账期是多少？",
-    "ground_truth": "首次下单 2022-05-30，距今(2026-07-25)约 4 年多。总采购额约 $801,766，未超过 Tier 2 所需的 > $1,000,000 年采购额门槛，因此定级为 Tier 3 Standard Account：最高信用额度 $250,000 美元，账期 Net 45 天。",
-    "grading_notes": "需要先查该客户首次下单日期和历史采购总额（结构化），再结合信用政策矩阵判断分级（非结构化）。核心校验点：分级=Tier 3，最高额度=$250,000，账期=Net 45天。"
+    "question": "How long has First Bike Store been a customer, from its first order to now? Per credit policy, what's the maximum credit limit and payment term a customer like this can apply for?",
+    "ground_truth": "First order 2022-05-30, a bit over 4 years ago (as of 2026-07-25). Total purchase volume is about $801,766, which does not exceed the > $1,000,000 annual purchase volume threshold required for Tier 2, so it's classified as Tier 3 Standard Account: maximum credit limit $250,000, payment term Net 45 days.",
+    "grading_notes": "Requires first querying this customer's first order date and total historical purchase volume (structured), then applying the credit policy matrix to determine the tier (unstructured). Core check points: tier = Tier 3, max limit = $250,000, payment term = Net 45 days."
   },
   {
     "id": "multi_hop_4",
     "category": "multi_hop",
-    "question": "Brakes and Gears 最大的一笔订单金额是多少？如果这笔交易要用公司支票（Corporate Cheque）结算，是否符合公司大额交易合规规定？",
-    "ground_truth": "该店最大单笔订单金额约 $124,249.49。根据大额交易合规规定，公司支票（Corporate Cheque）对大额交易是'严格禁止'（Strictly Prohibited for Bulk Supply），不允许使用，除非有全球经销商的有效公司豁免文件。",
-    "grading_notes": "需要先查该客户历史订单里金额最大的一笔（结构化），再核对结算方式合规规定（非结构化，也可能调用 check_large_transaction_compliance 函数）。核心校验点：最大订单金额≈$124,249，公司支票结算=不允许/严格禁止。"
+    "question": "What's the largest single order amount for Brakes and Gears? If that transaction were settled via Corporate Cheque, would it comply with the company's large-transaction compliance regulation?",
+    "ground_truth": "This store's largest single order is about $124,249.49. Per the large-transaction compliance regulation, Corporate Cheque is 'Strictly Prohibited for Bulk Supply' for large transactions — not allowed, unless there's a valid corporate waiver document for a global distributor.",
+    "grading_notes": "Requires first finding this customer's largest historical order amount (structured), then checking the settlement-method compliance rule (unstructured, may also involve calling check_large_transaction_compliance). Core check points: largest order amount ≈ $124,249, Corporate Cheque settlement = not allowed / strictly prohibited."
   },
   {
     "id": "multi_hop_5",
     "category": "multi_hop",
-    "question": "Health Spa, Limited 最大的一笔订单金额是多少？如果他们想用信用证（Letter of Credit）结算一笔同等金额的交易，是否符合标准审批状态？",
-    "ground_truth": "该店最大单笔订单金额约 $135,606.68。信用证（Letter of Credit）在公司规定里只有金额超过 $250,000 才算'Approved for Global Orders > $250k'的标准审批状态；$135,606.68 低于这个门槛，所以不算标准审批状态（settlement_allowed 应为 false / 不符合标准）。",
-    "grading_notes": "需要先查该客户最大单笔订单金额（结构化），再核对信用证结算的金额门槛规则（非结构化/UC Function）。核心校验点：最大订单金额≈$135,607，信用证在此金额下不算标准审批（低于25万美元门槛）。"
+    "question": "What's the largest single order amount for Health Spa, Limited? If they wanted to settle a transaction of the same amount via Letter of Credit, would that meet the standard-approval status?",
+    "ground_truth": "This store's largest single order is about $135,606.68. Per company regulation, a Letter of Credit only reaches 'Approved for Global Orders > $250k' standard-approval status when the amount exceeds $250,000; $135,606.68 is below that threshold, so it does not count as standard-approval status (settlement_allowed should be false / not compliant).",
+    "grading_notes": "Requires first finding this customer's largest single order amount (structured), then checking the amount threshold rule for Letter of Credit settlement (unstructured/UC Function). Core check points: largest order amount ≈ $135,607, a Letter of Credit at this amount does not count as standard-approval (below the $250k threshold)."
   },
   {
     "id": "multi_hop_6",
     "category": "multi_hop",
-    "question": "Vigorous Exercise Company 最大一笔订单金额是多少？如果他们要签一份为期2年、以欧元结算、金额相当于这笔最大订单金额的合同，是否需要强制加入外汇对冲条款？",
-    "ground_truth": "该店最大单笔订单金额约 $109,340.82。外汇对冲条款只有当合同为多年期（>1年）、非美元结算、且金额超过 $1,000,000 时才强制要求；这笔金额（约$10.9万）远低于 $1,000,000 门槛，所以不需要强制加外汇对冲条款（尽管期限和币种条件满足，金额条件不满足）。",
-    "grading_notes": "需要先查该客户最大单笔订单金额（结构化），再核对外汇对冲条款的触发条件（非结构化/UC Function，三个条件都要满足才强制）。核心校验点：最大订单金额≈$109,341，结论=不需要强制外汇对冲条款，理由需提到金额未达100万美元门槛。"
+    "question": "What's the largest single order amount for Vigorous Exercise Company? If they were to sign a 2-year contract settled in Euros for an amount equal to that largest order, would the FX hedging clause be mandatory?",
+    "ground_truth": "This store's largest single order is about $109,340.82. The FX hedging clause is only mandatory when a contract is multi-year (>1 year), settled in a non-USD currency, AND the amount exceeds $1,000,000; this amount (about $109,341) is far below the $1,000,000 threshold, so the FX hedging clause is not mandatory (even though the duration and currency conditions are met, the amount condition is not).",
+    "grading_notes": "Requires first finding this customer's largest single order amount (structured), then checking the trigger conditions for the FX hedging clause (unstructured/UC Function — all three conditions must be met for it to be mandatory). Core check points: largest order amount ≈ $109,341, conclusion = FX hedging clause not mandatory, with the reasoning citing that the amount doesn't reach the $1,000,000 threshold."
   }
 ]

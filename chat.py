@@ -1,11 +1,13 @@
-"""交互式命令行聊天工具，用于人工体验/调试 LangGraph agent。
+"""Interactive command-line chat tool for manually exercising/debugging the LangGraph
+agent.
 
-在真正部署 Databricks App 之前，这是最快的手动体验方式：本机直接连你 .env 里配置的
-Databricks workspace（Genie / Vector Search / LLM），跟部署后 App 的效果一致，只是跑在
-本地终端而不是网页上。
+This is the fastest way to try the agent by hand before actually deploying the
+Databricks App: it connects directly, from your own machine, to the Databricks
+workspace configured in your .env (Genie / Vector Search / LLM) — behavior matches the
+deployed App, just running in a local terminal instead of a web page.
 
-用法: python chat.py
-输入 exit / quit 退出；输入 /trace 切换是否打印每一步的白盒追踪细节。
+Usage: python chat.py
+Type exit / quit to leave; type /trace to toggle printing the white-box trace for each step.
 """
 
 from __future__ import annotations
@@ -21,23 +23,23 @@ def main() -> None:
     genie_conversation_id: str | None = None
     show_trace = False
 
-    print("SalesDuo agent 已就绪。输入问题开始对话（exit 退出，/trace 切换追踪详情显示）。\n")
+    print("SalesDuo agent ready. Type a question to start (exit to quit, /trace to toggle trace details).\n")
 
     while True:
         try:
-            user_input = input("你: ").strip()
+            user_input = input("You: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n再见。")
+            print("\nBye.")
             break
 
         if not user_input:
             continue
         if user_input.lower() in ("exit", "quit"):
-            print("再见。")
+            print("Bye.")
             break
         if user_input == "/trace":
             show_trace = not show_trace
-            print(f"(追踪详情显示已{'开启' if show_trace else '关闭'})\n")
+            print(f"(trace details {'enabled' if show_trace else 'disabled'})\n")
             continue
 
         messages.append({"role": "user", "content": user_input})

@@ -1,7 +1,7 @@
 ---
 name: history_framing
 version: 1
-description: router/finalize 共用，拼在历史对话前面的固定说明句（提醒模型历史内容不能直接当本轮答案）
+description: Shared by router/finalize — a fixed lead-in sentence prepended to conversation history (reminds the model history isn't automatically this turn's answer)
 variables: []
 ---
-以下是之前几轮对话，供理解当前问题的上下文（不代表本轮已经掌握这些信息，仍需按下面的检索/计算结果作答）:
+The following is the conversation from prior turns, provided to help understand the context of the current question (it does not mean this turn already has this information in hand — you still need to answer based on the retrieval/computation results below):

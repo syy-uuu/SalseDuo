@@ -1,14 +1,18 @@
-"""structured_agent 节点调用 Genie Space 的封装。
+"""Wrapper the structured_agent node uses to call Genie Space.
 
-Genie 是有状态的多轮对话（靠 conversation_id 维持上下文）：同一个用户请求如果需要
-第二次调用 Genie，必须复用同一个 conversation_id，不要每次开新会话——这里通过
-`conversation_id` 参数是否为 None 来决定开新会话还是在原会话里追加消息。
+Genie is a stateful multi-turn conversation (context is maintained via
+conversation_id): if the same user request needs to call Genie a second time, it must
+reuse the same conversation_id rather than opening a new session each time — here,
+whether the `conversation_id` argument is None decides whether we open a new
+conversation or append to the existing one.
 
-这里没有用 SDK 的 start_conversation_and_wait / create_message_and_wait 这两个便捷方法——
-它们在 Genie 返回 FAILED 状态时只会抛一个不带详情的 OperationFailed 异常，把 Genie 实际
-生成/执行失败的 SQL 和报错原因都丢掉了。改成手动轮询 get_message()，这样无论成功还是
-失败都能拿到完整的 message 对象，把失败原因也记录进白盒追踪里，而不是让整个请求崩溃、
-什么诊断信息都留不下。
+This deliberately doesn't use the SDK's convenience methods
+start_conversation_and_wait / create_message_and_wait — when Genie returns a FAILED
+status, those only raise a detail-free OperationFailed exception, discarding the SQL
+Genie actually generated/tried to run and the reason it failed. Instead this polls
+get_message() manually, so we get the full message object back whether it succeeded or
+failed, and can record the failure reason in the white-box trace instead of the whole
+request just crashing with no diagnostic information left behind.
 """
 
 from __future__ import annotations
@@ -52,9 +56,9 @@ def _extract_answer(client, message) -> GenieAnswer:
             if result and result.statement_response and result.statement_response.result:
                 rows = result.statement_response.result.data_array or []
                 if rows:
-                    text_parts.append(f"查询结果（前 {len(rows)} 行）: {rows}")
+                    text_parts.append(f"Query result (first {len(rows)} rows): {rows}")
     if not text_parts:
-        text_parts.append("(Genie 未返回可解析的文本或查询结果)")
+        text_parts.append("(Genie did not return any parseable text or query result)")
     return GenieAnswer(
         text="\n".join(text_parts),
         conversation_id=message.conversation_id,
@@ -71,7 +75,7 @@ def _poll_until_done(client, space_id: str, conversation_id: str, message_id: st
         if message.status in (MessageStatus.COMPLETED, MessageStatus.FAILED):
             return message
         time.sleep(_POLL_INTERVAL_SECONDS)
-    raise TimeoutError(f"Genie 消息 {message_id} 在 {_POLL_TIMEOUT_SECONDS} 秒内未完成")
+    raise TimeoutError(f"Genie message {message_id} did not finish within {_POLL_TIMEOUT_SECONDS} seconds")
 
 
 def ask_genie(question: str, conversation_id: str | None = None) -> GenieAnswer:
@@ -91,9 +95,9 @@ def ask_genie(question: str, conversation_id: str | None = None) -> GenieAnswer:
     )
 
     if message.status == MessageStatus.FAILED:
-        error_detail = str(message.error) if message.error else "未知错误（Genie 未返回 error 详情）"
+        error_detail = str(message.error) if message.error else "Unknown error (Genie did not return error details)"
         return GenieAnswer(
-            text=f"Genie 查询执行失败: {error_detail}",
+            text=f"Genie query execution failed: {error_detail}",
             conversation_id=message.conversation_id,
             sql_queries=[a.query.query for a in (message.attachments or []) if a.query and a.query.query],
             error=error_detail,

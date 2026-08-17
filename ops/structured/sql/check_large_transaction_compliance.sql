@@ -1,10 +1,11 @@
--- 依据 documents_generated/AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx
--- (Regulation ID: AW-COMP-REG-014) 第2/3节结算方式与外汇合规规则实现。
+-- Implements the settlement method and FX compliance rules (sections 2/3) from
+-- documents_generated/AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx
+-- (Regulation ID: AW-COMP-REG-014).
 CREATE OR REPLACE FUNCTION {catalog}.{schema}.check_large_transaction_compliance(
-  settlement_method STRING COMMENT '结算方式，取值之一: WIRE_TRANSFER, LETTER_OF_CREDIT, BANK_ACCEPTANCE_DRAFT, CORPORATE_CHEQUE',
-  transaction_amount_usd DOUBLE COMMENT '交易金额（美元）',
-  settlement_currency STRING DEFAULT 'USD' COMMENT '结算货币 ISO 代码，如 USD/EUR/AUD/GBP/CAD',
-  contract_duration_years DOUBLE DEFAULT 0 COMMENT '合同期限（年），单笔交易传 0；用于判断多年期外汇对冲条款是否强制要求'
+  settlement_method STRING COMMENT 'Settlement method, one of: WIRE_TRANSFER, LETTER_OF_CREDIT, BANK_ACCEPTANCE_DRAFT, CORPORATE_CHEQUE',
+  transaction_amount_usd DOUBLE COMMENT 'Transaction amount (USD)',
+  settlement_currency STRING DEFAULT 'USD' COMMENT 'Settlement currency ISO code, e.g. USD/EUR/AUD/GBP/CAD',
+  contract_duration_years DOUBLE DEFAULT 0 COMMENT 'Contract duration in years; pass 0 for a one-off transaction. Used to determine whether the multi-year FX hedging clause is mandatory'
 )
 RETURNS STRUCT<
   compliance_status: STRING,
@@ -13,7 +14,7 @@ RETURNS STRUCT<
   currency_approved: BOOLEAN,
   fx_hedging_clause_required: BOOLEAN
 >
-COMMENT 'AW-COMP-REG-014《大额交易与特殊结算合规规定》第2/3节：校验结算方式合规状态及外汇对冲条款是否强制要求。'
+COMMENT 'AW-COMP-REG-014 "Large Transaction and Special Settlement Compliance Regulation" sections 2/3: validates settlement-method compliance status and whether the FX hedging clause is mandatory.'
 RETURN (
   WITH method_calc AS (
     SELECT

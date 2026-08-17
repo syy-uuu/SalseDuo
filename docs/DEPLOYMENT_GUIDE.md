@@ -1,164 +1,170 @@
-# 部署手册：从零到线上 App
+# Deployment Guide: From Zero to a Live App
 
-> 本文档假定 Unity Catalog 里已有 `adventureworks_dataagent` 目录（项目复用现有目录，不
-> 新建），面向"仓库代码已经写好，要在一个新 workspace / 或重建当前 workspace 资源"的场景，
-> 按实际依赖顺序逐步给出：跑哪个文件、为什么跑这一步、预期看到什么结果、大概要多久。每步
-> 都可以直接照着"执行方式"栏复制命令。文末附一份精简版问题排查记录，完整版见
-> `docs/DEVELOPMENT_JOURNAL.md`（开发过程全记录）和 `docs/VERIFICATION_2026-07-27.md`
-> （认证切换后的重跑验证记录，含更细的耗时拆解）。
-
----
-
-## 0. 前置准备
-
-| 项目 | 说明 |
-|---|---|
-| Azure CLI | 本机需要安装并执行过 `az login`——本项目认证方式是 Azure 原生认证（不用 PAT），`databricks-sdk` 靠这个登录会话鉴权。 |
-| Python 环境 | `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`（装的是本地开发全量依赖，不是部署给 Serving Endpoint 的那份）。 |
-| `.env` | 复制 `.env.example` 为 `.env`，填好 `AZURE_SUBSCRIPTION_ID`/`RESOURCE_GROUP_NAME`/`DATABRICKS_WORKSPACE_NAME`（Azure 资源坐标，SDK 用它们解析出 workspace host）以及 `SQL_WAREHOUSE_ID`（下面所有步骤都要用）。其余变量(`GENIE_SPACE_ID` 等)会在对应步骤里产生，先留空。 |
-| Databricks CLI | `brew install databricks-cli` 或官方安装脚本，Step 7 部署 App 要用。 |
-
-预计耗时：10-20 分钟（大部分是环境安装，因人而异）。
+> This document assumes the `adventureworks_dataagent` catalog already exists in Unity
+> Catalog (the project reuses an existing catalog rather than creating a new one). It's
+> written for the scenario where the repo's code is already written and you need to
+> provision resources on a new workspace, or rebuild resources on the current one — steps
+> are laid out in actual dependency order: which file to run, why this step, what result
+> to expect, and roughly how long it takes. Every step's command can be copied straight
+> from the "How to run" column. A condensed troubleshooting log is appended at the end;
+> the full version is in `docs/DEVELOPMENT_JOURNAL.md` (the complete development-process
+> record) and `docs/VERIFICATION_2026-07-27.md` (the re-verification record after the
+> auth switch, with a more detailed timing breakdown).
 
 ---
 
-## Step 1：验证连接
+## 0. Prerequisites
 
-| | |
+| Item | Notes |
 |---|---|
-| **文件** | [ops/verify_connection.py](../ops/verify_connection.py) |
-| **目的** | 确认 Azure CLI 认证生效、能连上 workspace、`UC_CATALOG` 这个目录确实存在且有权限访问。后面所有步骤都建立在"这一步先通过"的前提上。 |
-| **执行方式** | `python -m ops.verify_connection` |
-| **预期结果** | 打印 `UC_CATALOG` 下的全部 schema 名（目前是 7 个：`humanresources`/`information_schema`/`person`/`production`/`purchasing`/`sales`/`salesduo_agent_tools`）。 |
-| **预计耗时** | 几秒 |
+| Azure CLI | Must be installed locally with `az login` already run — this project uses native Azure auth (not a PAT); `databricks-sdk` authenticates via this login session. |
+| Python environment | `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt` (installs the full local-development dependency set, not the one deployed to the Serving Endpoint). |
+| `.env` | Copy `.env.example` to `.env` and fill in `AZURE_SUBSCRIPTION_ID`/`RESOURCE_GROUP_NAME`/`DATABRICKS_WORKSPACE_NAME` (Azure resource coordinates the SDK uses to resolve the workspace host) plus `SQL_WAREHOUSE_ID` (needed by every step below). The remaining variables (`GENIE_SPACE_ID`, etc.) get produced by their corresponding step — leave them blank for now. |
+| Databricks CLI | `brew install databricks-cli` or the official install script; needed for deploying the App in Step 7. |
+
+Estimated time: 10-20 minutes (mostly environment setup, varies by person).
 
 ---
 
-## Step 2：结构化数据侧建仓
-
-### 2a. 建 UC Function
+## Step 1: Verify the connection
 
 | | |
 |---|---|
-| **文件** | [ops/structured/setup_uc_functions.py](../ops/structured/setup_uc_functions.py) + [ops/structured/sql/](../ops/structured/sql/)（两个 `.sql` 模板） |
-| **目的** | 建 `calculate_credit_terms`（信用条款计算）和 `check_large_transaction_compliance`（大额交易合规校验）两个 UC SQL Function，业务规则来自 `documents_generated/` 的两份政策文档。 |
-| **执行方式** | `python -m ops.structured.setup_uc_functions` |
-| **预期结果** | 打印"已创建/替换函数: calculate_credit_terms"/"check_large_transaction_compliance"。**光看这行打印不够**——建议紧接着用 SQL 查一次 `information_schema.routines` 确认函数真的存在，再实际调用一次确认返回值结构正确（历史上出现过"CREATE 没报错但函数其实调不通"的坑，见文末问题 1）。 |
-| **预计耗时** | 几秒到几十秒（取决于 SQL Warehouse 是不是冷启动） |
-
-### 2b. 创建 Genie Space（唯一必须手动做的一步）
-
-| | |
-|---|---|
-| **目的** | Genie Space 本身**目前没有公开 API 可以创建**，必须先在 Databricks UI 里手动建一个空的 Genie Space（Genie → New），数据源随便挂几张表占位即可，后面 2c 会覆盖掉。这是平台限制，不是可以绕开的实现选择。 |
-| **执行方式** | UI 操作：Databricks workspace 左侧栏 Genie → New Space，起个名字。 |
-| **预期结果** | 拿到一个 Genie Space ID（URL 里能看到），填进 `.env` 的 `GENIE_SPACE_ID`。 |
-| **预计耗时** | 几分钟 |
-
-### 2c. 配置 Genie（挂表 + 写 instructions）
-
-| | |
-|---|---|
-| **文件** | [ops/structured/setup_genie.py](../ops/structured/setup_genie.py)（表清单在 `GENIE_TABLES` 变量里显式列出，instructions 文本是 [prompts/genie_instructions.prompt](../prompts/genie_instructions.prompt)） |
-| **目的** | 把 `GENIE_TABLES` 里列出的表(person.person + 19 张 sales 表)挂进 2b 建的 Genie Space，同时写入 instructions 文本(表关联路径提示、两个 UC Function 的全限定名和返回字段、时间函数用法提示)——这些提示是从实测踩过的 Genie 生成 SQL 错误里反推出来的(见文末问题 3)。 |
-| **执行方式** | `python -m ops.structured.setup_genie` |
-| **预期结果** | 打印本次新增了几张表 + 目前共多少张表(从零开始建的话会显示"本次新增 20 张表,目前共 20 张表")。**这一步每次跑都会覆盖 Genie Space 的 instructions 和 sql_functions 字段**（平台限制，见文末问题 2），跑完不需要额外去 UI 补挂什么。 |
-| **预计耗时** | 几秒 |
+| **File** | [ops/verify_connection.py](../ops/verify_connection.py) |
+| **Purpose** | Confirm Azure CLI auth works, the workspace is reachable, and `UC_CATALOG` actually exists and is accessible. Every later step assumes this one passed first. |
+| **How to run** | `python -m ops.verify_connection` |
+| **Expected result** | Prints every schema name under `UC_CATALOG` (currently 7: `humanresources`/`information_schema`/`person`/`production`/`purchasing`/`sales`/`salesduo_agent_tools`). |
+| **Estimated time** | A few seconds |
 
 ---
 
-## Step 3：非结构化数据侧建仓
+## Step 2: Provision the structured-data side
 
-### 3a. 建 Vector Search Endpoint
-
-| | |
-|---|---|
-| **文件** | [ops/rag/setup_vs_endpoint.py](../ops/rag/setup_vs_endpoint.py) |
-| **目的** | 建 Vector Search endpoint（长期存在的共享基础设施，一个 endpoint 可以挂多个 index，所以跟下面的建 index 步骤拆开）。 |
-| **执行方式** | `python -m ops.rag.setup_vs_endpoint` |
-| **预期结果** | 打印"已创建 Vector Search endpoint"。这一步只是**发起创建请求，不等待完成**——需要自己再查一下状态（`client.vector_search_endpoints.get_endpoint(name=...).endpoint_status.state`）确认变成 `ONLINE` 再往下走。 |
-| **预计耗时** | 这个 workspace 里**第一次**建 Vector Search endpoint 可能要十几到几十分钟（卡在 `PROVISIONING_ENDPOINT`，不是索引同步慢）；如果之前建过、这次是重建，可能几分钟就好（实测过一次约 1-2 分钟）。不确定是哪种情况就按"可能要等很久"做心理准备。 |
-
-### 3b. 文档解析 + 建索引
+### 2a. Create the UC Functions
 
 | | |
 |---|---|
-| **文件** | [ops/rag/ingest_docs.py](../ops/rag/ingest_docs.py)（调用 [ops/rag/chunk_docs.py](../ops/rag/chunk_docs.py) 做切块） |
-| **目的** | 把 `documents_generated/` 下两份 docx 上传到 UC Volume 存档,解析切块写入 Delta 表,在 3a 建好的 endpoint 上创建 Delta Sync Index。 |
-| **执行方式** | `python -m ops.rag.ingest_docs` |
-| **前提** | 3a 的 endpoint 必须已经 `ONLINE`,否则建 index 这一步会失败。 |
-| **预期结果** | 依次打印:UC Volume 已存在/已创建、两份文档已上传、写入 18 条 chunk、已创建 Vector Search index。**同样只是发起了建 index 的请求**,需要另外轮询 `client.vector_search_indexes.get_index(...).status.ready` 直到变成 `True`——中间会经历"pending endpoint provisioning → pending pipeline resources → syncing initial data → ready"几个阶段。 |
-| **预计耗时** | 脚本本身跑完不到 1 分钟；index 从创建到 `ready=True` 另需约 10-15 分钟（异步同步，脚本不等它）。 |
-| **索引建完之后**,强烈建议用几个真实业务问题跑一遍 `src/clients/retriever.py::retrieve()`,人工检查 top-k 结果里有没有真正相关的段落——不能只看 `ready=True` 就当完成(见文末问题 4)。 |
+| **Files** | [ops/structured/setup_uc_functions.py](../ops/structured/setup_uc_functions.py) + [ops/structured/sql/](../ops/structured/sql/) (two `.sql` templates) |
+| **Purpose** | Creates the two UC SQL Functions `calculate_credit_terms` (credit-term computation) and `check_large_transaction_compliance` (large-transaction compliance check); the business rules come from the two policy documents under `documents_generated/`. |
+| **How to run** | `python -m ops.structured.setup_uc_functions` |
+| **Expected result** | Prints "Created/replaced function: calculate_credit_terms"/"check_large_transaction_compliance". **This print line alone isn't sufficient** — follow up right away with a SQL query against `information_schema.routines` to confirm the functions actually exist, then actually call each once to confirm the return structure is correct (there's history of "CREATE didn't error but the function actually can't be called," see problem 1 at the end of this document). |
+| **Estimated time** | A few seconds to tens of seconds (depends on whether the SQL Warehouse is cold-starting) |
+
+### 2b. Create the Genie Space (the one step that must be done by hand)
+
+| | |
+|---|---|
+| **Purpose** | A Genie Space itself **currently has no public API for creation** — you must first manually create an empty Genie Space in the Databricks UI (Genie → New), with any placeholder tables attached as the data source (step 2c below will overwrite this). This is a platform limitation, not an implementation choice that could be worked around. |
+| **How to run** | UI action: in the Databricks workspace left sidebar, Genie → New Space, give it a name. |
+| **Expected result** | You get a Genie Space ID (visible in the URL) — fill it into `.env`'s `GENIE_SPACE_ID`. |
+| **Estimated time** | A few minutes |
+
+### 2c. Configure Genie (attach tables + write instructions)
+
+| | |
+|---|---|
+| **File** | [ops/structured/setup_genie.py](../ops/structured/setup_genie.py) (the table list is listed explicitly in the `GENIE_TABLES` variable; the instructions text is [prompts/genie_instructions.prompt](../prompts/genie_instructions.prompt)) |
+| **Purpose** | Attaches the tables listed in `GENIE_TABLES` (person.person + 19 sales tables) to the Genie Space created in 2b, and writes the instructions text (table-join-path hints, the two UC Functions' fully-qualified names and return fields, date-function usage hints) — these hints were derived by working backward from actual Genie SQL-generation errors hit during testing (see problem 3 at the end of this document). |
+| **How to run** | `python -m ops.structured.setup_genie` |
+| **Expected result** | Prints how many tables were added this run + the current total table count (building from scratch will show "20 tables added this run, 20 tables total"). **This step overwrites the Genie Space's instructions and sql_functions fields every time it runs** (a platform limitation, see problem 2 at the end of this document) — no extra manual UI re-attachment is needed afterward. |
+| **Estimated time** | A few seconds |
 
 ---
 
-## Step 4-6：本地验证
+## Step 3: Provision the unstructured-data side
 
-### 4a. 离线单测
-
-| | |
-|---|---|
-| **文件** | [tests/test_chunk_docs.py](../tests/test_chunk_docs.py)、[tests/test_router_loop_limit.py](../tests/test_router_loop_limit.py)、[tests/test_unstructured_agent_query.py](../tests/test_unstructured_agent_query.py)、[tests/test_app_error_handling.py](../tests/test_app_error_handling.py) |
-| **目的** | 验证不依赖真实 Databricks 连接的纯逻辑(切块、router 循环上限兜底、多跳检索 query 拼接、App 错误处理),这几个改完代码应该随时能跑、随时该通过。 |
-| **执行方式** | `pytest tests/test_chunk_docs.py tests/test_router_loop_limit.py tests/test_unstructured_agent_query.py tests/test_app_error_handling.py -v` |
-| **预期结果** | 13 passed |
-| **预计耗时** | 几秒 |
-
-### 4b. 端到端集成测试(需要真实连接)
+### 3a. Create the Vector Search Endpoint
 
 | | |
 |---|---|
-| **文件** | [tests/test_integration_cases.py](../tests/test_integration_cases.py) |
-| **目的** | 真实连 Genie + Vector Search + LLM,覆盖三类场景(纯结构化、纯非结构化、多跳)+ loop 上限兜底 + 跨轮记忆(`genie_conversation_id` 复用、代词指代)。没有配置真实凭据时这个文件里的用例会自动跳过,不会报错。 |
-| **执行方式** | `pytest tests/test_integration_cases.py -v` |
-| **预期结果** | 5 passed |
-| **预计耗时** | 约 2-3 分钟(多次 Genie/LLM 往返) |
+| **File** | [ops/rag/setup_vs_endpoint.py](../ops/rag/setup_vs_endpoint.py) |
+| **Purpose** | Creates the Vector Search endpoint (long-lived shared infrastructure — one endpoint can host multiple indexes, which is why it's split from the index-creation step below). |
+| **How to run** | `python -m ops.rag.setup_vs_endpoint` |
+| **Expected result** | Prints "Created Vector Search endpoint". This step only **fires the creation request, it doesn't wait for completion** — you need to check the status yourself (`client.vector_search_endpoints.get_endpoint(name=...).endpoint_status.state`) and confirm it reaches `ONLINE` before continuing. |
+| **Estimated time** | The **first** time a Vector Search endpoint is created in this workspace it may take ten to several tens of minutes (stuck in `PROVISIONING_ENDPOINT`, not slow index syncing); if one was created before and this is a rebuild, it may only take a few minutes (one real run took about 1-2 minutes). If unsure which case applies, mentally prepare for "might take a while." |
 
-### 4c.（可选）交互式手动体验
-
-| | |
-|---|---|
-| **文件** | [chat.py](../chat.py) |
-| **目的** | 本地终端跟 agent 对话,人工感受一下回答质量,不用等部署上线才能测。输入 `/trace` 可以切换显示每一步的白盒追踪(router 判断理由、Genie 生成的 SQL、检索到的片段)。 |
-| **执行方式** | `python chat.py` |
-| **预计耗时** | 看自己想测多久 |
-
-### 4d.（可选）评测集跑批
+### 3b. Parse the documents + build the index
 
 | | |
 |---|---|
-| **文件** | [tests/eval/run_eval.py](../tests/eval/run_eval.py) + [tests/eval/eval_set.json](../tests/eval/eval_set.json) |
-| **目的** | 带 ground truth 的题集批量跑 + LLM 裁判打分,结果存进 `tests/eval/results/`(含每题完整 trace,不是只存最终答案)。 |
-| **执行方式** | `python -m tests.eval.run_eval` |
-| **预期结果** | 分数会有正常波动(Genie 的 NL2SQL 生成本质上非确定性,见文末问题 3),不追求 100%,能定性看出"核心链路能跑通"即可。 |
-| **预计耗时** | 题量决定,10 题量级几分钟 |
+| **File** | [ops/rag/ingest_docs.py](../ops/rag/ingest_docs.py) (calls [ops/rag/chunk_docs.py](../ops/rag/chunk_docs.py) to do the chunking) |
+| **Purpose** | Uploads the two docx files under `documents_generated/` to a UC Volume for archival, parses and chunks them into a Delta table, and creates a Delta Sync Index on the endpoint built in 3a. |
+| **How to run** | `python -m ops.rag.ingest_docs` |
+| **Prerequisite** | 3a's endpoint must already be `ONLINE`, otherwise index creation will fail. |
+| **Expected result** | Prints, in order: UC Volume already exists/created, both documents uploaded, 18 chunks written, Vector Search index created. **This is also just firing the index-creation request** — you need to separately poll `client.vector_search_indexes.get_index(...).status.ready` until it becomes `True`, passing through stages like "pending endpoint provisioning → pending pipeline resources → syncing initial data → ready" along the way. |
+| **Estimated time** | The script itself finishes in under a minute; the index taking `ready=True` after creation needs roughly another 10-15 minutes (async sync, the script doesn't wait for it). |
+| **After the index finishes building**, it's strongly recommended to run `src/clients/retriever.py::retrieve()` against a few real business questions and manually check whether the top-k results actually contain relevant passages — `ready=True` alone isn't proof of success (see problem 4 at the end of this document). |
 
 ---
 
-## Step 7：部署
+## Step 4-6: Local verification
 
-### 7a. 注册模型 + 建/更新 Serving Endpoint
-
-| | |
-|---|---|
-| **文件** | [ops/deploy_model.py](../ops/deploy_model.py) |
-| **目的** | 把 `src/agent.py`(整张 LangGraph 图的 ResponsesAgent 包装)注册成 Unity Catalog 里的一个模型版本,声明它运行时依赖的资源(Genie Space、Vector Search Index、SQL Warehouse、两个 UC Function),Databricks 会据此自动给 Serving Endpoint 授权访问这些资源;然后建/更新 Serving Endpoint 指向这个新版本。 |
-| **执行方式** | `python -m ops.deploy_model` |
-| **预期结果** | 打印"已注册模型: ... version N" + "已更新 serving endpoint"。脚本内部会等到 `update_config_and_wait`/`create_and_wait` 返回才打印完成,所以看到这行打印时 Serving Endpoint 已经是新版本、状态 `READY`。 |
-| **预计耗时** | 打包上传模型 artifact 几秒;Serving Endpoint 滚动更新到新版本另需约 10-15 分钟(平台行为,不可压缩)。 |
-
-### 7b. 部署 App 代码
+### 4a. Offline unit tests
 
 | | |
 |---|---|
-| **文件** | [databricks.yml](../databricks.yml)（Asset Bundle 配置） |
-| **目的** | 把 `app/` 目录的代码同步到 workspace、注册 App 这个资源的定义。 |
-| **预期结果** | `Deployment complete!` |
-| **预计耗时** | 几秒到几十秒 |
+| **Files** | [tests/test_chunk_docs.py](../tests/test_chunk_docs.py), [tests/test_router_loop_limit.py](../tests/test_router_loop_limit.py), [tests/test_unstructured_agent_query.py](../tests/test_unstructured_agent_query.py), [tests/test_app_error_handling.py](../tests/test_app_error_handling.py) |
+| **Purpose** | Verifies pure logic that doesn't depend on a real Databricks connection (chunking, the router loop-cap safety net, multi-hop retrieval query construction, App error handling) — these should be runnable and passing at any time after a code change. |
+| **How to run** | `pytest tests/test_chunk_docs.py tests/test_router_loop_limit.py tests/test_unstructured_agent_query.py tests/test_app_error_handling.py -v` |
+| **Expected result** | 13 passed |
+| **Estimated time** | A few seconds |
 
-**执行方式**——必须在跑 `databricks bundle` 命令的这个 shell 里单独 `export`,CLI 是独立
-进程,不会继承 Python 进程内部设置的环境变量(见文末问题 7):
+### 4b. End-to-end integration tests (needs a real connection)
+
+| | |
+|---|---|
+| **File** | [tests/test_integration_cases.py](../tests/test_integration_cases.py) |
+| **Purpose** | Connects to real Genie + Vector Search + LLM, covering three scenario types (structured-only, unstructured-only, multi-hop) plus the loop-cap safety net and cross-turn memory (`genie_conversation_id` reuse, pronoun resolution). Without real credentials configured, the cases in this file are skipped automatically, no error is raised. |
+| **How to run** | `pytest tests/test_integration_cases.py -v` |
+| **Expected result** | 5 passed |
+| **Estimated time** | About 2-3 minutes (multiple Genie/LLM round trips) |
+
+### 4c. (Optional) Interactive manual trial
+
+| | |
+|---|---|
+| **File** | [chat.py](../chat.py) |
+| **Purpose** | Chat with the agent from a local terminal, getting a hands-on feel for answer quality without waiting for a deployment to test. Type `/trace` to toggle displaying the white-box trace for each step (router's reasoning, SQL Genie generated, retrieved passages). |
+| **How to run** | `python chat.py` |
+| **Estimated time** | However long you want to spend testing |
+
+### 4d. (Optional) Run the evaluation set
+
+| | |
+|---|---|
+| **Files** | [tests/eval/run_eval.py](../tests/eval/run_eval.py) + [tests/eval/eval_set.json](../tests/eval/eval_set.json) |
+| **Purpose** | Runs a batch of ground-truth questions and grades them with an LLM judge, saving results into `tests/eval/results/` (including the full trace per question, not just the final answer). |
+| **How to run** | `python -m tests.eval.run_eval` |
+| **Expected result** | Scores will fluctuate somewhat normally (Genie's NL2SQL generation is inherently non-deterministic, see problem 3 at the end of this document) — 100% isn't the goal; being able to qualitatively confirm "the core chain runs end-to-end" is enough. |
+| **Estimated time** | Depends on question count; a few minutes for around 10 questions |
+
+---
+
+## Step 7: Deployment
+
+### 7a. Register the model + create/update the Serving Endpoint
+
+| | |
+|---|---|
+| **File** | [ops/deploy_model.py](../ops/deploy_model.py) |
+| **Purpose** | Registers `src/agent.py` (the ResponsesAgent wrapper around the whole LangGraph graph) as a model version in Unity Catalog, declaring the resources it depends on at runtime (Genie Space, Vector Search Index, SQL Warehouse, the two UC Functions) — Databricks uses this to automatically grant the Serving Endpoint access to these resources; then creates/updates the Serving Endpoint to point at this new version. |
+| **How to run** | `python -m ops.deploy_model` |
+| **Expected result** | Prints "Registered model: ... version N" plus "Updated serving endpoint". The script waits internally until `update_config_and_wait`/`create_and_wait` returns before printing that it's done, so by the time you see that line, the Serving Endpoint is already on the new version and in `READY` state. |
+| **Estimated time** | Packaging/uploading the model artifact takes a few seconds; the Serving Endpoint's rolling update to the new version needs roughly another 10-15 minutes (platform behavior, not compressible). |
+
+### 7b. Deploy the App code
+
+| | |
+|---|---|
+| **File** | [databricks.yml](../databricks.yml) (Asset Bundle config) |
+| **Purpose** | Syncs the `app/` directory's code to the workspace and registers the App resource definition. |
+| **Expected result** | `Deployment complete!` |
+| **Estimated time** | A few seconds to tens of seconds |
+
+**How to run** — must `export` this separately in the same shell you run the
+`databricks bundle` command in; the CLI is a separate process and doesn't inherit
+environment variables set inside a Python process (see problem 7 at the end of this
+document):
 ```bash
 export DATABRICKS_AZURE_RESOURCE_ID=$(python3 -c "
 from src.config import settings
@@ -167,64 +173,136 @@ print(f'/subscriptions/{settings.azure_subscription_id}/resourceGroups/{settings
 databricks bundle deploy
 ```
 
-### 7c. 启动 App
+### 7c. Start the App
 
 | | |
 |---|---|
-| **目的** | `bundle deploy` 只是注册资源定义,**不会启动 App**,必须额外这一步才会真正拉起 compute、把代码部署上去(见文末问题 8)。 |
-| **执行方式** | `databricks bundle run salesduo_agent`（同一个 shell,`DATABRICKS_AZURE_RESOURCE_ID` 还生效着） |
-| **预期结果** | 一连串"App is starting..."之后 `App started successfully`,给出访问 URL。**不要只信这行文字**——建议再用 SDK 查一次 `client.apps.get(app_name)`,确认 `app_status.state == "RUNNING"` 且 `compute_status.state == "ACTIVE"`。 |
-| **预计耗时** | 约 3-4 分钟 |
+| **Purpose** | `bundle deploy` only registers the resource definition — **it does not start the App**; this extra step is required to actually spin up compute and deploy the code onto it (see problem 8 at the end of this document). |
+| **How to run** | `databricks bundle run salesduo_agent` (same shell, `DATABRICKS_AZURE_RESOURCE_ID` still in effect) |
+| **Expected result** | A series of "App is starting..." messages followed by `App started successfully`, with an access URL. **Don't just trust this text** — it's worth also querying via the SDK, `client.apps.get(app_name)`, to confirm `app_status.state == "RUNNING"` and `compute_status.state == "ACTIVE"`. |
+| **Estimated time** | About 3-4 minutes |
 
-### 7d. 授权 App 的 service principal（容易漏掉的一步）
+### 7d. Grant permissions to the App's service principal (an easy step to miss)
 
 | | |
 |---|---|
-| **文件** | [ops/grant_app_permissions.py](../ops/grant_app_permissions.py) |
-| **目的** | Databricks App 部署后会自动生成一个独立的 service principal,这个身份才是 `structured_agent` 调 Genie 查底层表时实际用到的执行身份——不授权的话,结构化查询会在这一步报 `PERMISSION_DENIED`(完整排查过程见文末问题 9,这是本项目踩过的最大一个坑)。授权范围直接从 `ops/structured/setup_genie.py::GENIE_TABLES`/`REQUIRED_FUNCTIONS` 联动读取,不用手动同步维护第二份表清单。 |
-| **执行方式** | `python -m ops.grant_app_permissions` |
-| **前提** | 必须在 7c App **至少成功启动过一次之后**再跑——service principal 是 App 创建/启动后才有的,提前跑会报"没查到 service_principal_client_id"。 |
-| **预期结果** | 打印 App 的 service principal 信息 + 依次执行约 26 条 `GRANT` 语句(`USE CATALOG` + 每个用到的 schema 的 `USE SCHEMA` + 每张表的 `SELECT` + 业务函数所在 schema 的 `USE SCHEMA`+每个函数的 `EXECUTE`)。 |
-| **预计耗时** | 几秒 |
-| **提醒** | App 每次被删除重建都会拿到一个**新的** service principal,这份授权要跟着重新跑一次,不是对"App 这个名字"永久生效。 |
+| **File** | [ops/grant_app_permissions.py](../ops/grant_app_permissions.py) |
+| **Purpose** | A Databricks App automatically generates its own service principal on deploy — this is the identity actually used when `structured_agent` calls Genie to query the underlying tables. Without granting it access, structured queries will fail with `PERMISSION_DENIED` at this step (full investigation in problem 9 at the end of this document — this is the single biggest pitfall hit in this project). The grant scope is read directly from `ops/structured/setup_genie.py::GENIE_TABLES`/`REQUIRED_FUNCTIONS`, no need to manually maintain a second table list in sync. |
+| **How to run** | `python -m ops.grant_app_permissions` |
+| **Prerequisite** | Must run this only **after** the App in 7c has successfully started at least once — the service principal only exists once the App is created/started; running this too early fails with "no service_principal_client_id found." |
+| **Expected result** | Prints the App's service principal info + runs about 26 `GRANT` statements in sequence (`USE CATALOG` + `USE SCHEMA` for each schema used + `SELECT` per table + `USE SCHEMA` for the business-function schema + `EXECUTE` per function). |
+| **Estimated time** | A few seconds |
+| **Reminder** | Every time the App is deleted and recreated it gets a **new** service principal — this grant needs to be re-run then; it doesn't permanently apply to "the App with this name." |
 
-### 7e. 最终验收
+### 7e. Final acceptance check
 
-- SDK 确认:`client.serving_endpoints.get(...).state.ready == "READY"`、`client.apps.get(...)` 的 `app_status.state == "RUNNING"` 且 `compute_status.state == "ACTIVE"`。
-- 实际打开 7c 给出的 URL,在聊天框里问一个真实的多跳问题(比如"客户 XX 的年采购额和信用额度上限分别是多少"),确认结构化 + 非结构化都能正常返回,不是只有政策类问题能答。
+- Confirm via SDK: `client.serving_endpoints.get(...).state.ready == "READY"`, and
+  `client.apps.get(...)`'s `app_status.state == "RUNNING"` with
+  `compute_status.state == "ACTIVE"`.
+- Actually open the URL given in 7c, and ask a real multi-hop question in the chat box
+  (e.g. "what are customer XX's annual purchase volume and credit limit cap"), confirming
+  both structured and unstructured queries return normally — not just policy-only
+  questions working.
 
-预计耗时:几分钟。
+Estimated time: a few minutes.
 
 ---
 
-## 全流程预计总耗时
+## Overall estimated time end to end
 
-去掉可选的 4c/4d,Step 1 到 7e 大概 **50-90 分钟**,大头在三处不可压缩的异步等待上:3a(Vector Search endpoint 首次创建,十几到几十分钟)、3b(index 同步,10-15 分钟)、7a(Serving Endpoint 滚动更新,10-15 分钟)。代码本身的执行时间累计不到 10 分钟。
+Excluding the optional 4c/4d, Step 1 through 7e takes roughly **50-90 minutes**, with the
+bulk of it in three uncompressible async waits: 3a (first-time Vector Search endpoint
+creation, ten to several tens of minutes), 3b (index sync, 10-15 minutes), and 7a
+(Serving Endpoint rolling update, 10-15 minutes). The code's own execution time adds up
+to under 10 minutes total.
 
 ---
 
-## 附:遇到过的问题与解决方式(精简版,完整过程见 `docs/DEVELOPMENT_JOURNAL.md`)
+## Appendix: problems hit and how they were resolved (condensed — full account in `docs/DEVELOPMENT_JOURNAL.md`)
 
-1. **UC SQL Function 多字段返回,`CREATE` 不报错,调用时报 `SCALAR_SUBQUERY_RETURN_MORE_THAN_ONE_OUTPUT_COLUMN`**——`RETURN` 语句返回多列 `SELECT` 必须用 `STRUCT(...)` 包一层,`CREATE OR REPLACE FUNCTION` 本身不校验这个,必须建完实际调用一次才能验证出来。
+1. **A UC SQL Function returning multiple fields — `CREATE` doesn't error, but calling it
+   fails with `SCALAR_SUBQUERY_RETURN_MORE_THAN_ONE_OUTPUT_COLUMN`** — a `RETURN`
+   statement returning a multi-column `SELECT` must be wrapped in `STRUCT(...)`;
+   `CREATE OR REPLACE FUNCTION` itself doesn't validate this, so it can only be caught by
+   actually calling the function once after creation.
 
-2. **Genie Space 的 `serialized_space` 是不透明格式,`instructions.sql_functions` 字段无法通过 API 写入**——不管内容是什么都会报 "Certified answer 'xxx' does not exist"。解决:把 UC Function 的全限定名和返回字段直接写进 `instructions.text_instructions` 文本里,Genie 生成 SQL 时就能正确调用,不需要那个失效的"挂载为工具"机制;每次跑 `setup_genie.py` 都要主动把 `sql_functions` 字段摘掉再提交,否则整个 update 失败。
+2. **A Genie Space's `serialized_space` is an opaque format, and the
+   `instructions.sql_functions` field can't be written via the API** — regardless of
+   content, it fails with "Certified answer 'xxx' does not exist." Resolution: write the
+   UC Function's fully-qualified name and return fields directly into the
+   `instructions.text_instructions` text, so Genie calls it correctly when generating
+   SQL, without needing the broken "attach as tool" mechanism; every run of
+   `setup_genie.py` must actively strip the `sql_functions` field before submitting,
+   otherwise the whole update fails.
 
-3. **Genie 生成 SQL 的三种典型错误**:跳过中间表直接错误 JOIN、`DATEDIFF`(不加引号)和 `DATE_TRUNC`(加引号)的引号用法搞反、把标量函数当表函数写进 `FROM` 子句。解决:都是通过在 instructions 文本里加具体的纠正提示解决的(见 `prompts/genie_instructions.prompt`),这类问题没有一次性穷举修完的办法,是 Genie NL2SQL 生成本身的非确定性,换个问题措辞可能还会出新的错误写法。
+3. **Three typical categories of Genie SQL-generation errors**: skipping an intermediate
+   table and joining incorrectly, mixing up `DATEDIFF`'s (unquoted) and `DATE_TRUNC`'s
+   (quoted) quoting conventions, and writing a scalar function into a `FROM` clause as if
+   it were a table function. Resolution: all resolved by adding specific corrective
+   guidance into the instructions text (see `prompts/genie_instructions.prompt`) — there
+   is no way to exhaustively fix this class of problem once and for all; it's inherent
+   non-determinism in Genie's own NL2SQL generation, and rephrasing a question could
+   surface a new failure mode.
 
-4. **向量检索漏检目标段落**——文档头部的 Policy ID/Effective Date 这类 2 列 key-value 元数据表,在向量检索里相似度分数异常高,会把真正相关的长段落挤出 top-k。解决:切块时直接跳过这类 2 列表格不索引;`top_k` 从 5 调到 8(实测 5 会漏检)。
+4. **Vector retrieval missing target passages** — the 2-column key-value metadata table
+   at the top of a document (Policy ID/Effective Date, etc.) gets an unusually high
+   similarity score in vector search, crowding the genuinely relevant longer passages out
+   of the top-k. Resolution: skip indexing this kind of 2-column table entirely during
+   chunking; bumped `top_k` from 5 to 8 (testing showed 5 misses target passages).
 
-5. **Router 的 LLM 在 `reason` 字段较长时偶发生成格式非法的 JSON**——强制结构化输出(`with_structured_output`)也会偶发出错。解决:加 3 次重试,连续失败就安全降级为 `finalize` 并注明信息可能不完整,不让整个请求崩溃。
+5. **The router's LLM occasionally generates invalid-format JSON when the `reason` field
+   is longer** — even forced structured output (`with_structured_output`) fails
+   occasionally. Resolution: added 3 retries, safely degrading to `finalize` with a note
+   that information may be incomplete after repeated failures, rather than letting the
+   whole request crash.
 
-6. **本地跑部署脚本,mlflow 默认注册到本地 SQLite,不是真的 Databricks workspace**——本地"注册成功"的日志是真的,只是注册到了错误的地方,没有任何报错提示。解决:显式 `mlflow.set_tracking_uri("databricks")` + `mlflow.set_registry_uri("databricks-uc")`。
+6. **Running the deploy script locally, mlflow defaults to registering to a local
+   SQLite DB instead of the real Databricks workspace** — the "registered successfully"
+   log locally is genuinely printed, it's just registered in the wrong place, with no
+   error to flag it. Resolution: explicitly set `mlflow.set_tracking_uri("databricks")`
+   + `mlflow.set_registry_uri("databricks-uc")`.
 
-7. **`databricks` CLI 命令不会读取项目的 `.env` 文件,也不会继承 Python 进程内部设置的环境变量**——需要在跑 `databricks bundle` 命令的这个 shell 里单独 `export DATABRICKS_AZURE_RESOURCE_ID=...`(或早期 PAT 时代的 `DATABRICKS_HOST`/`TOKEN`)。
+7. **The `databricks` CLI command doesn't read the project's `.env` file, nor does it
+   inherit environment variables set inside a Python process** — you need to separately
+   `export DATABRICKS_AZURE_RESOURCE_ID=...` (or, in the earlier PAT era,
+   `DATABRICKS_HOST`/`TOKEN`) in the same shell you run the `databricks bundle` command
+   in.
 
-8. **`databricks bundle deploy` 不会自动启动 App**——只上传代码、注册资源定义,必须额外 `databricks bundle run <app_resource_key>` 才会真正启动 compute。验收标准是查 `client.apps.get(...)` 的真实状态字段,不能只看 CLI 打印的文字。
+8. **`databricks bundle deploy` does not automatically start the App** — it only uploads
+   code and registers the resource definition; an extra
+   `databricks bundle run <app_resource_key>` is required to actually start compute. The
+   acceptance criterion is checking the real status fields via `client.apps.get(...)`,
+   not just trusting what the CLI prints.
 
-9. **(本项目最大的一个坑)Serving Endpoint/App 调 Genie 查底层表报 `PERMISSION_DENIED`,即使本地个人身份完全正常**——排查了很久,一度以为是某个查不到的"Serving Endpoint 系统身份",试过给 `account users` 组授权、给 Genie Space 加 `CAN_RUN` 权限,均未解决。真正原因:**Databricks App 部署后会自动生成一个独立的 service principal
-(`client.apps.get(app_name).service_principal_client_id`),这个身份才是实际执行 Genie
-查询用到的身份**,只要用 `ops/grant_app_permissions.py` 给它授权(底层表 `SELECT` + 业务规则函数 `EXECUTE`)就解决了。这个身份是 App 特有的,每次删除重建 App 都要重新跑一次授权脚本。
+9. **(The single biggest pitfall in this project) The Serving Endpoint/App calling Genie
+   to query underlying tables fails with `PERMISSION_DENIED`, even though the local
+   personal identity works fine** — took a long time to investigate, at one point
+   suspected as some untraceable "Serving Endpoint system identity," tried granting the
+   `account users` group and adding `CAN_RUN` on the Genie Space, neither resolved it.
+   Actual cause: **a Databricks App automatically generates its own separate service
+   principal on deploy
+   (`client.apps.get(app_name).service_principal_client_id`), and this is the identity
+   actually used to execute the Genie query** — granting it access (`SELECT` on the
+   underlying tables + `EXECUTE` on the business-rule functions) via
+   `ops/grant_app_permissions.py` resolved it. This identity is specific to the App, and
+   the grant script needs to be re-run every time the App is deleted and recreated.
 
-10. **认证方式从 PAT 切到 Azure CLI 原生认证后,`databricks-ai-search` 包(`VectorSearchClient`)完全不兼容**——这个包的认证逻辑硬编码只认静态 PAT/service principal token,Azure CLI 给的是会自动刷新的动态令牌,该包拿不到就直接报错。解决:整个 Vector Search 相关代码(`retriever.py`/`setup_vs_endpoint.py`/`ingest_docs.py`)迁移到 `databricks-sdk` 自带的 `client.vector_search_indexes`/`client.vector_search_endpoints` 原生 API,跟其他代码走同一套认证,不用再单独处理。
+10. **After switching auth from a PAT to native Azure CLI auth, the
+    `databricks-ai-search` package (`VectorSearchClient`) became completely
+    incompatible** — that package's auth logic hardcodes support only for a static
+    PAT/service-principal token; the Azure CLI hands over a dynamically-refreshed token,
+    which the package can't use and fails on outright. Resolution: migrated all the
+    Vector-Search-related code (`retriever.py`/`setup_vs_endpoint.py`/`ingest_docs.py`)
+    to `databricks-sdk`'s own `client.vector_search_indexes`/
+    `client.vector_search_endpoints` native API, using the same auth as everything else,
+    no separate handling needed.
 
-11. **mlflow 自己的凭据解析逻辑也会建一个不带参数的裸 `WorkspaceClient()`**——不止 `databricks-ai-search` 这一个第三方库有这个问题,`mlflow.utils.databricks_utils.get_databricks_host_creds()` 内部同样如此。解决:不能只在自己封装的 `db_client.py` 里处理认证参数,还要把 `AZURE_SUBSCRIPTION_ID`/`RESOURCE_GROUP_NAME`/`DATABRICKS_WORKSPACE_NAME` 拼成 databricks-sdk 官方认的环境变量 `DATABRICKS_AZURE_RESOURCE_ID` 写回 `os.environ`,这样任何代码路径新建的裸 `WorkspaceClient()` 都能自动认到,不用逐个库去适配。
+11. **mlflow's own credential-resolution logic also constructs a bare, argument-less
+    `WorkspaceClient()`** — not just the third-party `databricks-ai-search` library has
+    this problem; `mlflow.utils.databricks_utils.get_databricks_host_creds()` does the
+    same internally. Resolution: it's not enough to handle auth parameters only inside
+    our own `db_client.py` wrapper — `AZURE_SUBSCRIPTION_ID`/`RESOURCE_GROUP_NAME`/
+    `DATABRICKS_WORKSPACE_NAME` are also assembled into `DATABRICKS_AZURE_RESOURCE_ID`,
+    the environment variable databricks-sdk officially recognizes, and written back into
+    `os.environ`, so any bare `WorkspaceClient()` constructed anywhere in the code path
+    picks it up automatically, without having to adapt each library individually.

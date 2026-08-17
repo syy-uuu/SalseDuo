@@ -1,11 +1,15 @@
-"""把 documents_generated/ 下的 docx 解析成结构化 chunk 列表。
+"""Parses the docx files under documents_generated/ into a list of structured chunks.
 
-纯本地逻辑，不依赖任何 Databricks 连接，便于单测（tests/test_chunk_docs.py）。
+Pure local logic, no dependency on any Databricks connection, which makes it easy to
+unit-test (tests/test_chunk_docs.py).
 
-切块策略：文档本身很短（每份仅几段正文 + 1-2 张表），按"逻辑段落"切块比固定长度滑窗更利于
-检索精度——每个编号小节（"1. Purpose and Scope" 这种标题起始的段落）合并为一个 chunk；
-表格按行切块（表头 + 单行数据拼成一个 chunk），这样"Tier 2 的账期是多少"这类问题能直接命中
-对应的那一行，而不必命中整张表。
+Chunking strategy: the documents themselves are short (a few paragraphs of body text
+plus 1-2 tables each), so chunking by "logical section" gives better retrieval
+precision than a fixed-length sliding window — each numbered section (a paragraph
+starting with a heading like "1. Purpose and Scope") is merged into one chunk; tables
+are chunked row by row (header + a single data row combined into one chunk), so a
+question like "what's the Tier 2 payment term" can hit that exact row directly instead
+of needing to match the whole table.
 """
 
 from __future__ import annotations
@@ -30,7 +34,8 @@ class Chunk:
 
 
 def _iter_block_items(document: docx.Document):
-    """按 docx XML 中出现的真实顺序，依次产出段落(Paragraph)或表格(Table)对象。"""
+    """Yields Paragraph or Table objects in the actual order they appear in the docx
+    XML."""
     from docx.oxml.ns import qn
     from docx.table import Table
     from docx.text.paragraph import Paragraph
@@ -85,11 +90,15 @@ def chunk_document(path: Path) -> list[Chunk]:
                 continue
             is_key_value_table = len(rows[0]) == 2
             if is_key_value_table:
-                # 这是文档头部的 Policy ID / Effective Date / Approved By / Applicable To
-                # 元数据表，不是业务规则内容。实测发现这类短小、通用的文本在向量检索里
-                # 会有异常高的相似度分数（几乎对任何查询都排前列），把真正相关的规则段落
-                # 挤到后面（例如"超限15%需要谁审批"这个问题检索不到第3节的审批流程段落，
-                # 反而排前面的全是这几行元数据）。这里索引价值低、噪音大，直接跳过不索引。
+                # This is the Policy ID / Effective Date / Approved By / Applicable To
+                # metadata table at the top of the document, not business-rule content.
+                # In practice this kind of short, generic text gets an unusually high
+                # similarity score in vector search (it ranks near the top for almost
+                # any query), crowding out the actually-relevant rule paragraphs (e.g.
+                # a question like "who needs to approve a 15% overage" fails to surface
+                # section 3's approval-workflow paragraph, because these few metadata
+                # rows rank above it instead). Low retrieval value, high noise — skip
+                # indexing it entirely.
                 continue
             header = rows[0]
             data_rows = rows[1:] or rows

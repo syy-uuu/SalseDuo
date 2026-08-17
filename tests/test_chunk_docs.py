@@ -1,4 +1,4 @@
-"""纯本地测试：docx 切块逻辑（不依赖任何 Databricks 连接）。"""
+"""Pure local test: docx chunking logic (no dependency on any Databricks connection)."""
 
 from pathlib import Path
 

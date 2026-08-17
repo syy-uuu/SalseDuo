@@ -1,8 +1,10 @@
-"""structured_agent 节点：调用 Genie Space 查询 AdventureWorksLT 结构化数据，
-必要时 Genie 会调用挂载的 UC Function（calculate_credit_terms /
-check_large_transaction_compliance）完成业务规则计算。
+"""The structured_agent node: calls the Genie Space to query AdventureWorksLT
+structured data; when needed, Genie invokes the attached UC Functions
+(calculate_credit_terms / check_large_transaction_compliance) to compute business
+rules.
 
-Genie 有状态多轮对话：复用 state 里的 genie_conversation_id，不重新开会话。
+Genie is a stateful multi-turn conversation: reuses genie_conversation_id from state
+instead of starting a new conversation each time.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ def _build_question(state: AgentState) -> str:
     parts = [state.get("user_query", "")]
     if state.get("credit_info"):
         parts.append(
-            "补充背景（来自公司政策文档，供计算业务规则时参考）:\n" + state["credit_info"]
+            "Additional context (from company policy documents, for reference when computing business rules):\n" + state["credit_info"]
         )
     return "\n\n".join(parts)
 

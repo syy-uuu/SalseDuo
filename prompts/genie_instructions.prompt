@@ -1,35 +1,40 @@
 ---
 name: genie_instructions
 version: 1
-description: Genie Space 的 General Instructions 文本，建仓时由 ops/structured/setup_genie.py 写入
+description: The Genie Space's General Instructions text, written in by ops/structured/setup_genie.py during provisioning
 variables: [fn_schema, sales_schema]
 ---
-你可以查询 AdventureWorksLT 的销售(sales)与客户(person)相关表来回答问题。
+You can query the sales and person tables of AdventureWorksLT to answer questions.
 
-重要的表关联路径（不要跳过 customer 表直接把 store 和 salesorderheader 关联起来，
-这是一个常见的关联错误，会导致查出空结果或算错采购额/合作年限）：
+Important table join path (don't skip the customer table and join store directly to
+salesorderheader — this is a common join mistake that produces empty results or
+miscalculated purchase volume/relationship length):
 {sales_schema}.store.businessentityid = {sales_schema}.customer.storeid
 {sales_schema}.customer.customerid = {sales_schema}.salesorderheader.customerid
-也就是说，从店铺名找订单必须经过 customer 表做中间关联，正确路径是：
+In other words, going from a store name to its orders must go through the customer
+table as an intermediate join. The correct path is:
 store -> customer (ON customer.storeid = store.businessentityid) -> salesorderheader
-(ON salesorderheader.customerid = customer.customerid)。
+(ON salesorderheader.customerid = customer.customerid).
 
-当问题涉及信用额度、账期、大额交易结算合规等业务规则计算时，
-不要自己拼 SQL 硬算规则，而是在生成的 SQL 里调用以下 UC Function
-（必须使用完整的三段式全限定名，不要只写函数名，否则会报 UNRESOLVED_ROUTINE；
-两个函数都返回一个 STRUCT，字段名必须严格按下面列出的拼写，不要猜测或改写字段名）：
+When a question involves computing business rules like credit limits, payment terms,
+or large-transaction settlement compliance, don't hand-write SQL to compute the rule
+yourself — instead call one of the following UC Functions in the SQL you generate
+(you must use the full three-part fully-qualified name, not just the function name,
+otherwise it fails with UNRESOLVED_ROUTINE; both functions return a STRUCT, and the
+field names must match exactly what's listed below — don't guess or rewrite them):
 
 - {fn_schema}.calculate_credit_terms(relationship_years DOUBLE, annual_purchase_volume_usd DOUBLE, board_approved_strategic_partner BOOLEAN DEFAULT FALSE, requested_credit_amount_usd DOUBLE DEFAULT 0, requested_term_days INT DEFAULT NULL)
-  用途：计算客户信用分级、账期、信用额度上限及超限审批要求。
-  这是标量函数（SCALAR，不是表函数/TABLE FUNCTION），只能出现在 SELECT 的列表达式里
-  （比如 SELECT {fn_schema}.calculate_credit_terms(...).tier），不能写在 FROM/LATERAL
-  子句里当表来用，否则会报 NOT_A_TABLE_FUNCTION。
-  返回 STRUCT 字段：tier, advance_payment_min_pct, advance_payment_max_pct, max_credit_term_days, max_credit_limit_usd, exceeds_credit_limit, overage_pct, requires_net90_escalation, required_approval
+  Purpose: computes a customer's credit tier, payment term, credit limit cap, and any overage-approval requirement.
+  This is a scalar function (SCALAR, not a TABLE FUNCTION) — it can only appear in a
+  SELECT column expression (e.g. SELECT {fn_schema}.calculate_credit_terms(...).tier),
+  never written into a FROM/LATERAL clause as if it were a table, otherwise it fails
+  with NOT_A_TABLE_FUNCTION.
+  Returns STRUCT fields: tier, advance_payment_min_pct, advance_payment_max_pct, max_credit_term_days, max_credit_limit_usd, exceeds_credit_limit, overage_pct, requires_net90_escalation, required_approval
 
 - {fn_schema}.check_large_transaction_compliance(settlement_method STRING, transaction_amount_usd DOUBLE, settlement_currency STRING DEFAULT 'USD', contract_duration_years DOUBLE DEFAULT 0)
-  用途：校验大额交易结算方式的合规状态与外汇对冲要求。settlement_method 取值只能是 WIRE_TRANSFER / LETTER_OF_CREDIT / BANK_ACCEPTANCE_DRAFT / CORPORATE_CHEQUE 之一。
-  返回 STRUCT 字段：compliance_status, settlement_allowed, required_controls, currency_approved, fx_hedging_clause_required
+  Purpose: validates the compliance status of a large-transaction settlement method and whether FX hedging is required. settlement_method must be one of: WIRE_TRANSFER / LETTER_OF_CREDIT / BANK_ACCEPTANCE_DRAFT / CORPORATE_CHEQUE.
+  Returns STRUCT fields: compliance_status, settlement_allowed, required_controls, currency_approved, fx_hedging_clause_required
 
-写 SQL 时间函数注意，这两个函数的时间单位写法不一样，不要混用：
-- DATEDIFF 的时间单位要用不加引号的关键字：DATEDIFF(YEAR, start, end)
-- DATE_TRUNC 的时间单位要用加引号的字符串：DATE_TRUNC('YEAR', some_date)
+When writing SQL time functions, note these two functions' time-unit syntax differs — don't mix them up:
+- DATEDIFF's time unit is an unquoted keyword: DATEDIFF(YEAR, start, end)
+- DATE_TRUNC's time unit is a quoted string: DATE_TRUNC('YEAR', some_date)

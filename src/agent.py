@@ -1,10 +1,14 @@
-"""对外唯一契约：MLflow ResponsesAgent 包装。Databricks Apps 聊天框只认这个接口。
+"""The single external contract: an MLflow ResponsesAgent wrapper. This is the only
+interface the Databricks Apps chat frontend knows about.
 
-内部调用 LangGraph 的 graph.invoke()（predict）/复用同一次 invoke 结果做伪流式输出
-（predict_stream）。我们的节点（router 的 LLM 判断、Genie 查询、Vector Search 检索）
-不是逐 token 产生的，所以 predict_stream 不做逐 token 真流式，而是等 graph 跑完后，
-把最终文本按一次性的 delta + done 事件序列输出——这仍然符合 ResponsesAgent 的流式契约，
-且不需要为了"看起来是流式"而拆分 LangGraph 内部无法真正增量产出的结果。
+Internally calls LangGraph's graph.invoke() (predict) / reuses the same invoke() result
+to produce pseudo-streaming output (predict_stream). Our nodes (the router's LLM
+judgment, Genie queries, Vector Search retrieval) don't produce output token by token, so
+predict_stream doesn't attempt real token-by-token streaming — instead, once the graph
+finishes running, it emits the final text as a one-shot delta + done event sequence.
+This still satisfies the ResponsesAgent streaming contract, and avoids artificially
+chopping up a result that LangGraph's internals can't actually produce incrementally,
+just to "look like" streaming.
 """
 
 from __future__ import annotations
@@ -39,11 +43,14 @@ class SalesDuoResponsesAgent(ResponsesAgent):
         user_query = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
         )
-        # 跨轮对话记忆：messages 里"当前这句之前"的历史由调用方（app.py）在 request.input
-        # 里整段发过来（见 src/graph/state.py::recent_history_text，router/finalize 从
-        # messages 里取历史，不是从这里单独传）。genie_conversation_id 不属于标准的
-        # messages 格式，走 custom_inputs 单独传——调用方把上一轮 custom_outputs 里收到的
-        # 值原样带回来，用来复用同一个 Genie 会话，不让每句新消息都变成 Genie 的新会话。
+        # Cross-turn conversation memory: history "before the current message" is sent
+        # in full by the caller (app.py) as part of request.input (see
+        # src/graph/state.py::recent_history_text — router/finalize pull history from
+        # messages, it isn't passed separately here). genie_conversation_id isn't part of
+        # the standard messages format, so it travels separately via custom_inputs — the
+        # caller passes back whatever value it received in the previous turn's
+        # custom_outputs, so the same Genie conversation is reused instead of every new
+        # message starting a fresh Genie session.
         custom_inputs = request.custom_inputs or {}
         initial_state = {
             "messages": messages,
@@ -65,16 +72,18 @@ class SalesDuoResponsesAgent(ResponsesAgent):
         final_messages = result.get("messages", [])
         if final_messages and final_messages[-1]["role"] == "assistant":
             return final_messages[-1]["content"]
-        return result.get("structured_result") or result.get("credit_info") or "(无回答)"
+        return result.get("structured_result") or result.get("credit_info") or "(no answer)"
 
     def predict(self, request: ResponsesAgentRequest) -> ResponsesAgentResponse:
         result = self._run_graph(request)
         final_text = self._final_text(result)
         output_item = self.create_text_output_item(text=final_text, id=str(uuid.uuid4()))
-        # custom_outputs 里带上完整白盒 trace（router 判断、Genie SQL、检索片段）——
-        # 部署到 Serving 之后，本地就没法直接看 graph.invoke() 的返回值了，这是唯一能
-        # 在线上环境追查"这次为什么没查到数据"这类问题的办法，不是可有可无的调试糖。
-        # 同时带上 genie_conversation_id，供调用方下一轮通过 custom_inputs 传回来延续会话。
+        # custom_outputs carries the full white-box trace (router decisions, Genie SQL,
+        # retrieved chunks) — once this is deployed to Serving there's no way to
+        # directly inspect graph.invoke()'s return value locally anymore, so this is the
+        # only way to debug "why didn't this query find any data" once it's live. Not an
+        # optional debugging nicety. Also carries genie_conversation_id, so the caller
+        # can pass it back next turn via custom_inputs to continue the same conversation.
         return ResponsesAgentResponse(
             output=[output_item], custom_outputs=self._custom_outputs(result)
         )

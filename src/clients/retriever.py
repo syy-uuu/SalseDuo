@@ -1,11 +1,14 @@
-"""unstructured_agent 节点调用 Vector Search 的轻量封装：输入 query，返回 top-k chunk。
+"""Lightweight wrapper the unstructured_agent node uses to call Vector Search:
+takes a query, returns the top-k chunks.
 
-不用 databricks-ai-search 这个第三方包——它的认证逻辑只认 PAT 或 Service Principal 的静态
-token，不支持 Azure CLI（az login）这种会自动刷新的动态令牌，本项目切到 Azure 原生认证后
-这个包会在建 client 那一步直接报 "Please specify either personal access token or service
-principal client ID and secret."。改用 databricks-sdk 自带的
-`WorkspaceClient().vector_search_indexes`，走跟其他所有代码一致的同一套认证
-（`get_workspace_client()`），不需要给这一个模块单独处理认证问题。
+Doesn't use the third-party `databricks-ai-search` package — its auth logic only
+accepts a static PAT or Service Principal token, not the dynamically-refreshed token
+Azure CLI (`az login`) produces. After this project switched to native Azure auth, that
+package fails outright at client-construction time with "Please specify either personal
+access token or service principal client ID and secret." Uses databricks-sdk's own
+`WorkspaceClient().vector_search_indexes` instead, going through the same auth as
+every other module in the project (`get_workspace_client()`) — no need to handle auth
+separately just for this one module.
 """
 
 from __future__ import annotations

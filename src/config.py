@@ -1,5 +1,6 @@
-"""统一的环境变量读取入口。全项目其他模块一律 `from src.config import settings`，
-不要在别处直接调用 os.environ / os.getenv。"""
+"""Single entry point for reading environment variables. Every other module in the
+project must use `from src.config import settings` — don't call os.environ / os.getenv
+directly elsewhere."""
 
 from __future__ import annotations
 
@@ -19,9 +20,10 @@ def _env(name: str, default: str | None = None) -> str | None:
 
 @dataclass(frozen=True)
 class Settings:
-    # Databricks 认证与连接（Azure 原生认证：不显式传 PAT，靠本机 `az login` 的 Azure AD
-    # 凭据 + 下面三个 Azure 资源坐标，由 databricks-sdk 通过 Azure Resource Manager 解析出
-    # workspace host 并鉴权）
+    # Databricks auth and connection (native Azure auth: no explicit PAT — relies on the
+    # local machine's `az login` Azure AD credentials plus the three Azure resource
+    # coordinates below, which databricks-sdk uses to resolve the workspace host via
+    # Azure Resource Manager and authenticate)
     azure_subscription_id: str | None = field(
         default_factory=lambda: _env("AZURE_SUBSCRIPTION_ID")
     )
@@ -52,7 +54,7 @@ class Settings:
     # Genie
     genie_space_id: str | None = field(default_factory=lambda: _env("GENIE_SPACE_ID"))
 
-    # 非结构化数据 / Vector Search
+    # Unstructured data / Vector Search
     docs_source_dir: str = field(
         default_factory=lambda: _env("DOCS_SOURCE_DIR", "documents_generated")
     )
@@ -68,14 +70,14 @@ class Settings:
         default_factory=lambda: _env("EMBEDDING_MODEL_ENDPOINT", "databricks-gte-large-en")
     )
 
-    # 编排 LLM
+    # Orchestration LLM
     llm_serving_endpoint: str = field(
         default_factory=lambda: _env(
             "LLM_SERVING_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
         )
     )
 
-    # MLflow / 评测 / 部署
+    # MLflow / evaluation / deployment
     mlflow_experiment_path: str = field(
         default_factory=lambda: _env("MLFLOW_EXPERIMENT_PATH", "/Shared/salesduo-agent")
     )
@@ -86,25 +88,30 @@ class Settings:
         default_factory=lambda: _env("DATABRICKS_APP_NAME", "salesduo-agent")
     )
 
-    # 编排安全阀
+    # Orchestration safety valve
     max_router_loops: int = field(default_factory=lambda: int(_env("MAX_ROUTER_LOOPS", "5")))
 
     def require(self, *names: str) -> None:
-        """校验指定字段非空，缺失时抛出清晰的错误信息，便于在具体 step 里提前失败。"""
+        """Validates that the given fields are non-empty, raising a clear error message
+        when something is missing, so failures surface early with a useful message."""
         missing = [n for n in names if not getattr(self, n)]
         if missing:
             raise RuntimeError(
-                f"缺少必需的环境变量/配置项: {', '.join(missing)}。请在 .env 中补充后重试。"
+                f"Missing required environment variable(s)/setting(s): {', '.join(missing)}. "
+                "Add them to .env and try again."
             )
 
     def __post_init__(self) -> None:
-        # 不是所有代码路径都经过 src/db_client.py 拿 WorkspaceClient——比如 mlflow 自己的
-        # mlflow.utils.databricks_utils.get_databricks_host_creds()（tracking/registry
-        # 相关调用内部会走到这里）会新建一个不带任何参数的 WorkspaceClient()，根本不知道
-        # AZURE_SUBSCRIPTION_ID/RESOURCE_GROUP_NAME/DATABRICKS_WORKSPACE_NAME 这三个自定义
-        # 变量的存在。databricks-sdk 官方认的是 DATABRICKS_AZURE_RESOURCE_ID 这个环境变量
-        # （任何裸 WorkspaceClient() 都会自动读它），这里把拼好的资源 ID 写回这个环境变量，
-        # 让所有代码路径（不管是不是经过我们自己的封装）都能用同一套 Azure 认证。
+        # Not every code path goes through src/db_client.py to get a WorkspaceClient —
+        # for example mlflow's own mlflow.utils.databricks_utils.get_databricks_host_creds()
+        # (used internally by tracking/registry calls) constructs a bare, argument-less
+        # WorkspaceClient() with no idea our custom AZURE_SUBSCRIPTION_ID/
+        # RESOURCE_GROUP_NAME/DATABRICKS_WORKSPACE_NAME variables even exist.
+        # databricks-sdk officially recognizes the DATABRICKS_AZURE_RESOURCE_ID
+        # environment variable (any bare WorkspaceClient() reads it automatically), so
+        # this writes the assembled resource ID back into that variable, letting every
+        # code path — whether or not it goes through our own wrapper — use the same
+        # Azure auth.
         if (
             not os.environ.get("DATABRICKS_AZURE_RESOURCE_ID")
             and self.azure_subscription_id

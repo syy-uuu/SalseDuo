@@ -1,122 +1,143 @@
-# 多轮记忆验证 — 真实问答记录（2026-07-28）
+# Multi-turn memory verification — real Q&A transcript (2026-07-28)
 
-> 对应改动:`docs/AGENT_MEMORY_DESIGN.md`。对应可重复运行的正式测试:
-> `tests/test_integration_cases.py::
-> test_multi_turn_memory_reuses_genie_conversation_and_resolves_pronouns`（那个测试只做
-> 结构化断言，看不到实际问答内容，这份文件补上人能直接看的问答记录）。
+> Corresponds to the change described in `docs/AGENT_MEMORY_DESIGN.md`. The
+> corresponding repeatable formal test is
+> `tests/test_integration_cases.py::test_multi_turn_memory_reuses_genie_conversation_and_resolves_pronouns`
+> (that test only makes structural assertions and doesn't show the actual Q&A content —
+> this file supplements it with a human-readable transcript).
 >
-> 同一个 2 轮场景实际跑了 3 次（2 次走 `chat.py` 等效路径，1 次走部署 App 等效路径），
-> 记录全部 3 次的真实输出，包括中间那次的失败，不做筛选。
+> The same 2-turn scenario was actually run 3 times (2 via the `chat.py`-equivalent
+> path, 1 via the deployed-App-equivalent path). All 3 runs' real outputs are recorded
+> in full, including the failure in the middle one, with no cherry-picking.
 
 ---
 
-## 第 1 次运行（chat.py 等效路径：直接 `build_graph().invoke()`）
+## Run 1 (chat.py-equivalent path: calling `build_graph().invoke()` directly)
 
-**结果：核心机制成功，但触发了一次已知的 LLM 结构化输出偶发错误**
+**Result: the core mechanism succeeded, but triggered one instance of a known LLM structured-output occasional error**
 
 ```
-第 1 轮 - 用户: 客户 Bike World 的年采购额是多少？
-Agent: Bike World 客户的年采购额分别为：2023 年 47,508.55 美元，2024 年 41,509.61 美元，
-2025 年 17,339.82 美元。其中，2023 年采购额最高，2025 年有所下降。信息收集完整。
-[genie_conversation_id: 上一轮=None -> 这一轮='01f18a79e9ae1ceb8da4f595fe0e070f']
+Turn 1 - User: What's customer Bike World's annual purchase volume?
+Agent: Bike World's annual purchase volumes are: 2023 $47,508.55, 2024 $41,509.61,
+2025 $17,339.82. Of these, 2023 had the highest purchase volume, with a decline visible
+by 2025. Information is complete.
+[genie_conversation_id: previous turn=None -> this turn='01f18a79e9ae1ceb8da4f595fe0e070f']
 
-第 2 轮 - 用户: 那他们的信用额度上限是多少？
-Agent: 根据之前的对话和提供的政策文档，Bike World 客户的年采购额分别为：2023 年
-47,508.55 美元，2024 年 41,509.61 美元，2025 年 17,339.82 美元。这些信息表明 Bike
-World 的年度采购额都超过 1 万美元，但没有明确的信息表明他们属于哪个客户等级。
+Turn 2 - User: And what's their credit limit cap?
+Agent: Based on the prior conversation and the retrieved policy documents, customer
+Bike World's annual purchase volumes were: 2023 $47,508.55, 2024 $41,509.61, 2025
+$17,339.82. This shows Bike World's annual purchase volume exceeds $10,000 every year,
+but there's no clear information indicating which customer tier they fall into.
 
-然而，根据 [AW_Corporate_Credit_and_Payment_Terms_Policy.docx] 中的客户等级和付款条件
-矩阵，我们可以看到：
-- Tier 2 Preferred Account 的最大允许信用限额为 75 万美元，需要年采购额超过 100 万美元。
-- Tier 3 Standard Account 的最大允许信用限额为 25 万美元，需要年采购额超过 1 万美元且有
-  良好的付款合规历史。
+However, per the customer tier and payment-terms matrix in
+[AW_Corporate_Credit_and_Payment_Terms_Policy.docx], we can see:
+- Tier 2 Preferred Account's maximum allowed credit limit is $750,000, requiring annual
+  purchase volume over $1,000,000.
+- Tier 3 Standard Account's maximum allowed credit limit is $250,000, requiring annual
+  purchase volume over $10,000 with a good payment-compliance history.
 
-由于 Bike World 的年采购额最高为 47,508.55 美元，低于 100 万美元的门槛，因此他们可能不
-属于 Tier 2 Preferred Account。考虑到他们的采购额和可能的付款历史，Bike World 可能属于
-Tier 3 Standard Account，最大允许信用限额为 25 万美元。
+Since Bike World's highest annual purchase volume is $47,508.55, below the $1,000,000
+threshold, they likely don't qualify as a Tier 2 Preferred Account. Taking their
+purchase volume and probable payment history into account, Bike World is likely a Tier
+3 Standard Account, with a maximum allowed credit limit of $250,000.
 
-但是，需要注意的是，这个结论是基于之前提供的信息和政策文档得出的，没有直接的证据证明
-Bike World 属于哪个客户等级。因此，为了给出准确的答案，需要进一步确认 Bike World 的客户
-等级和具体的信用额度上限。
+That said, it should be noted this conclusion is based on previously provided
+information and the policy documents, with no direct evidence proving which customer
+tier Bike World actually falls into. To give a precise answer, further confirmation of
+Bike World's customer tier and specific credit limit cap would be needed.
 
-信息收集可能不完整，结论基于之前的对话和政策文档。
-[genie_conversation_id: 上一轮='01f18a79e9ae1ceb8da4f595fe0e070f' -> 这一轮='01f18a79e9ae1ceb8da4f595fe0e070f']
+Information gathering may be incomplete; this conclusion is based on the prior
+conversation and the policy documents.
+[genie_conversation_id: previous turn='01f18a79e9ae1ceb8da4f595fe0e070f' -> this turn='01f18a79e9ae1ceb8da4f595fe0e070f']
 ```
 
-**观察**：`genie_conversation_id` 正确复用；第二轮"他们"被正确理解为 Bike World（复述了
-第一轮的具体数字），代词消歧生效。但第二轮的 router 触发了"连续 3 次输出格式错误，安全
-降级为 finalize"（`Error code: 400 - BAD_REQUEST: Model response did not respect the
-required format`）——这是 `src/graph/router.py` 模块注释和
-`docs/DEVELOPMENT_JOURNAL.md` 案例 5 里早就记录过的已知偶发问题，不是这次改动引入的。
-后果是 `structured_agent` 没有真正被调用，finalize 只能基于历史数字自己推测客户分级，
-最终推测结果（Tier 3，25 万美元）虽然凑巧和后两次运行的真实计算结果一致，但这次是"猜"
-出来的，不是查出来的，回答里也如实带了"结论可能不完整"的免责说明。
+**Observation**: `genie_conversation_id` was correctly reused; in the second turn,
+"they" was correctly resolved to Bike World (it restated the specific numbers from the
+first turn) — pronoun resolution worked. But the second turn triggered the router's
+"3 consecutive malformed-output errors, safely degrading to finalize"
+(`Error code: 400 - BAD_REQUEST: Model response did not respect the required format`) —
+this is the known occasional issue already documented in `src/graph/router.py`'s module
+comment and case 5 of `docs/DEVELOPMENT_JOURNAL.md`, not something introduced by this
+change. The consequence was that `structured_agent` never actually got called, and
+finalize had to guess the tier from the historical numbers alone. The final guess
+(Tier 3, $250,000) happened to match the real computed result from the other two runs,
+but this time it was "guessed," not "looked up," and the answer honestly included a
+disclaimer that the conclusion might be incomplete.
 
 ---
 
-## 第 2 次运行（chat.py 等效路径：重跑一次，验证第 1 次是否稳定复现）
+## Run 2 (chat.py-equivalent path: rerun once, to verify whether run 1 reproduces reliably)
 
-**结果：完全成功，无 LLM 报错**
+**Result: fully successful, no LLM error**
 
 ```
-第 1 轮 - 用户: 客户 Bike World 的年采购额是多少？
-Agent: 客户 Bike World 的年采购额分别为：2023 年 47,508.55 美元，2024 年 41,509.61 美元，
-2025 年 17,339.82 美元。其中 2023 年采购额最高，2025 年出现明显下降。
-[genie_conversation_id: 上一轮=None -> 这一轮='01f18a7ae4f212f5b13def4b7291e9eb']
+Turn 1 - User: What's customer Bike World's annual purchase volume?
+Agent: Customer Bike World's annual purchase volumes are: 2023 $47,508.55, 2024
+$41,509.61, 2025 $17,339.82. 2023 had the highest purchase volume, with a clear decline
+by 2025.
+[genie_conversation_id: previous turn=None -> this turn='01f18a7ae4f212f5b13def4b7291e9eb']
 
-第 2 轮 - 用户: 那他们的信用额度上限是多少？
-Agent: 根据之前的对话和检索结果，客户 Bike World 的信用额度上限为 **250,000 美元**。此
-额度是根据 Bike World 的合作年限和本年度采购额计算得出的。由于 Bike World 的年采购额分别
-为 47,508.55 美元、41,509.61 美元和 17,339.82 美元，且没有达到 1M 美元的门槛，因此被
-归类为 Tier 3 Standard Account，最大允许信用限额为 250,000 美元。
+Turn 2 - User: And what's their credit limit cap?
+Agent: Based on the prior conversation and the retrieval results, customer Bike World's
+credit limit cap is **$250,000**. This limit is computed from Bike World's years as a
+customer and this year's purchase volume. Since Bike World's annual purchase volumes
+were $47,508.55, $41,509.61, and $17,339.82, none reaching the $1M threshold, they are
+classified as a Tier 3 Standard Account, with a maximum allowed credit limit of
+$250,000.
 
-注意：信息可能不完整，因为之前的对话和检索结果中没有提供所有相关信息。
-[genie_conversation_id: 上一轮='01f18a7ae4f212f5b13def4b7291e9eb' -> 这一轮='01f18a7ae4f212f5b13def4b7291e9eb']
+Note: information may be incomplete, since the prior conversation and retrieval
+results didn't provide every relevant detail.
+[genie_conversation_id: previous turn='01f18a7ae4f212f5b13def4b7291e9eb' -> this turn='01f18a7ae4f212f5b13def4b7291e9eb']
 ```
 
-**观察**：这次 router 完整走完了多跳（`structured_agent` 真正被调用，计算出了 250,000
-美元，Tier 3 分类正确），跟第 1 次的"推测结果"数字一致，但这次是真正查/算出来的，不是
-推测的——两次结果一致，间接印证了业务规则计算本身（`calculate_credit_terms` UC
-Function）是稳定、确定性的，不稳定的只是"router 判不判断需要重新计算"这一步。
-`genie_conversation_id` 同样正确复用。
+**Observation**: this time router completed the full multi-hop path (`structured_agent`
+was actually called, correctly computing $250,000, Tier 3) — the numbers matched run 1's
+"guessed result," but this time it was genuinely looked up/computed, not guessed. This
+indirectly confirms the business-rule computation itself (the `calculate_credit_terms`
+UC Function) is stable and deterministic — the only instability was in "whether router
+decides to recompute this step." `genie_conversation_id` was correctly reused as well.
 
 ---
 
-## 第 3 次运行（部署 App 等效路径：直接实例化 `SalesDuoResponsesAgent.predict()`）
+## Run 3 (deployed-App-equivalent path: instantiating `SalesDuoResponsesAgent.predict()` directly)
 
-**结果：完全成功，验证的是 `custom_inputs`/`custom_outputs` 透传这一层（前两次运行覆盖
-不到这一层）**
+**Result: fully successful — verifies the `custom_inputs`/`custom_outputs` passthrough layer specifically (not covered by the first two runs)**
 
 ```
-第 1 轮 - 用户: 客户 Bike World 的年采购额是多少？
-Agent: 客户 Bike World 的年采购额分别为：2023 年 47,508.55 美元，2024 年 41,509.61 美元，
-2025 年 17,339.82 美元。注意：采购额在 2025 年出现明显下降。由于问题仅涉及已提供的数据，
-因此没有额外信息需要说明。
-[genie_conversation_id: 上一轮=None -> 这一轮='01f18a7d338f11e88dba341dcc76a984']
+Turn 1 - User: What's customer Bike World's annual purchase volume?
+Agent: Customer Bike World's annual purchase volumes are: 2023 $47,508.55, 2024
+$41,509.61, 2025 $17,339.82. Note: there was a clear decline in 2025. Since the
+question only concerns the data already provided, no additional information is needed.
+[genie_conversation_id: previous turn=None -> this turn='01f18a7d338f11e88dba341dcc76a984']
 
-第 2 轮 - 用户: 那他们的信用额度上限是多少？
-Agent: 客户 Bike World 的信用额度上限为 **250,000 美元**。此额度是根据他们的年采购额和
-与公司的合作年限自动计算得出的。由于之前的对话中已经确定了这一点，因此不需要进一步的
-计算或检索。
-[genie_conversation_id: 上一轮='01f18a7d338f11e88dba341dcc76a984' -> 这一轮='01f18a7d338f11e88dba341dcc76a984']
+Turn 2 - User: And what's their credit limit cap?
+Agent: Customer Bike World's credit limit cap is **$250,000**. This limit was
+automatically computed from their annual purchase volume and years as a customer with
+the company. Since this was already established in the prior conversation, no further
+computation or retrieval is needed.
+[genie_conversation_id: previous turn='01f18a7d338f11e88dba341dcc76a984' -> this turn='01f18a7d338f11e88dba341dcc76a984']
 ```
 
-**观察**：走的是 `ResponsesAgentRequest`/`ResponsesAgentResponse` 这条正式协议路径
-（`request.input` 带完整历史、`request.custom_inputs`/`response.custom_outputs` 传
-`genie_conversation_id`），不是直接调 `graph.invoke()`。结果和第 2 次运行一致（250,000
-美元），`genie_conversation_id` 正确透传，证明 `src/agent.py` 里新加的
-`custom_inputs`/`custom_outputs` 读写逻辑是对的。
+**Observation**: this went through the formal protocol path
+(`ResponsesAgentRequest`/`ResponsesAgentResponse` — `request.input` carries the full
+history, `request.custom_inputs`/`response.custom_outputs` carry
+`genie_conversation_id`), not a direct `graph.invoke()` call. The result matched run 2
+($250,000), `genie_conversation_id` was correctly passed through, confirming the newly
+added `custom_inputs`/`custom_outputs` read/write logic in `src/agent.py` is correct.
 
 ---
 
-## 汇总结论
+## Summary conclusion
 
-- **核心机制（3/3 次）**：`genie_conversation_id` 跨轮正确复用；"他们"指代 Bike World
-  正确消歧。两条独立代码路径（图内部调用 / ResponsesAgent 协议层）都验证过，不是只测了
-  一层。
-- **1/3 次触发了已知的、非本次改动引入的 LLM 结构化输出偶发错误**，导致 router 没有
-  重新触发计算，finalize 靠历史数字自行推测（推测结果凑巧正确，但方法论上不可靠）——
-  已经作为新发现记录进 `docs/CODE_REVIEW_FINDINGS.md`（跟第 10 条"历史窗口不一致"风险
-  相关）。
-- 最终稳定得到的正确结果：Bike World 属于 Tier 3 Standard Account，信用额度上限
-  250,000 美元。
+- **The core mechanism (3/3 runs)**: `genie_conversation_id` was correctly reused
+  across turns; "they" was correctly resolved to Bike World every time. Both
+  independent code paths (the graph's internal invocation / the ResponsesAgent protocol
+  layer) were verified, not just one.
+- **1/3 runs triggered a known LLM structured-output occasional error, not introduced by
+  this change**, causing router to skip re-triggering the computation, with finalize
+  guessing from historical numbers instead (the guess happened to be correct, but the
+  methodology wasn't reliable) — recorded as a new finding in
+  `docs/CODE_REVIEW_FINDINGS.md` (related to item 10, the "history window mismatch"
+  risk).
+- The stable, correctly-computed final result: customer Bike World is a Tier 3 Standard
+  Account, with a credit limit cap of $250,000.

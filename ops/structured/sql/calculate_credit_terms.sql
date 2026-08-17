@@ -1,18 +1,22 @@
--- 依据 documents_generated/AW_Corporate_Credit_and_Payment_Terms_Policy.docx
--- (Policy ID: AW-FIN-POL-003) 第2节客户分级矩阵 + 第3节例外审批流程实现。
+-- Implements the customer tiering matrix (section 2) and exception approval workflow
+-- (section 3) from documents_generated/AW_Corporate_Credit_and_Payment_Terms_Policy.docx
+-- (Policy ID: AW-FIN-POL-003).
 --
--- 设计说明（Tier 1 为何不做成自动判定）：
--- 文档中 Tier 1 Strategic Partner 的资质条件是"Global distributors or strategic OEMs
--- with specific board approval"——这是一个定性的董事会审批门槛，文档并未给出可计算的
--- 数值边界，因此不应臆造一个数字阈值来自动把客户判给 Tier 1。函数改为显式接收
--- board_approved_strategic_partner 参数，由调用方（agent 结合文档/对话上下文确认后）
--- 显式传入 TRUE，否则一律按 New/Tier 3/Tier 2 的可计算数值边界判定。
+-- Design note (why Tier 1 isn't auto-determined): the document's qualification
+-- criteria for Tier 1 Strategic Partner is "Global distributors or strategic OEMs with
+-- specific board approval" — a qualitative board-approval threshold, and the document
+-- gives no computable numeric boundary for it, so this function should not invent a
+-- numeric threshold to auto-assign a customer to Tier 1. Instead the function takes an
+-- explicit board_approved_strategic_partner parameter, which the caller (the agent,
+-- after confirming from the document/conversation context) passes as TRUE explicitly;
+-- otherwise the customer is always evaluated against the computable numeric boundaries
+-- for New/Tier 3/Tier 2.
 CREATE OR REPLACE FUNCTION {catalog}.{schema}.calculate_credit_terms(
-  relationship_years DOUBLE COMMENT '客户与 Adventure Works 的存续合作年限',
-  annual_purchase_volume_usd DOUBLE COMMENT '客户年采购金额（美元）',
-  board_approved_strategic_partner BOOLEAN DEFAULT FALSE COMMENT '是否已获得董事会批准为 Tier 1 战略合作伙伴（定性判断，需调用方显式确认，不由本函数自动推断）',
-  requested_credit_amount_usd DOUBLE DEFAULT 0 COMMENT '本次申请/占用的信用额度（美元），用于比对该档位允许的最高信用额度',
-  requested_term_days INT DEFAULT NULL COMMENT '本次申请的账期天数，用于识别 Net 90 长账期例外'
+  relationship_years DOUBLE COMMENT 'Number of years the customer has had an ongoing relationship with Adventure Works',
+  annual_purchase_volume_usd DOUBLE COMMENT 'Customer annual purchase volume (USD)',
+  board_approved_strategic_partner BOOLEAN DEFAULT FALSE COMMENT 'Whether board approval has been obtained for Tier 1 Strategic Partner status (a qualitative judgment call the caller must confirm explicitly — this function never infers it automatically)',
+  requested_credit_amount_usd DOUBLE DEFAULT 0 COMMENT 'The credit amount being requested/utilized in this case (USD), used to check against this tier''s maximum allowed credit limit',
+  requested_term_days INT DEFAULT NULL COMMENT 'The requested payment term in days for this case, used to detect the Net 90 long-term-payment exception'
 )
 RETURNS STRUCT<
   tier: STRING,
@@ -25,7 +29,7 @@ RETURNS STRUCT<
   requires_net90_escalation: BOOLEAN,
   required_approval: STRING
 >
-COMMENT 'AW-FIN-POL-003《公司信用额度与付款条款政策》第2/3节：按客户分级矩阵计算信用条款，并判断超限时所需的审批级别。'
+COMMENT 'AW-FIN-POL-003 "Corporate Credit and Payment Terms Policy" sections 2/3: computes credit terms per the customer tiering matrix, and determines the approval level required when a limit is exceeded.'
 RETURN (
   WITH tier_calc AS (
     SELECT
@@ -58,8 +62,9 @@ RETURN (
         ELSE 30
       END AS max_credit_term_days,
       CASE tier
-        -- Tier 1 上不封顶（文档写作 "Above $750,000 USD"），用 NULL 代表无硬性上限，
-        -- 但仍需 CFO 签字，由 required_approval 单独体现，不代表可无审批放款。
+        -- Tier 1 has no hard cap (the document writes it as "Above $750,000 USD"); NULL
+        -- represents "no hard ceiling", but CFO sign-off is still required — captured
+        -- separately via required_approval, not implying approval-free lending.
         WHEN 'Tier 1 Strategic Partner' THEN NULL
         WHEN 'Tier 2 Preferred Account' THEN 750000.0
         WHEN 'Tier 3 Standard Account' THEN 250000.0

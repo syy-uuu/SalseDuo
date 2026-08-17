@@ -1,5 +1,5 @@
-"""组装 LangGraph StateGraph: router 节点带循环的条件边，串联
-structured_agent / unstructured_agent / finalize 四个节点。"""
+"""Assembles the LangGraph StateGraph: the router node with a looping conditional edge,
+chaining the structured_agent / unstructured_agent / finalize nodes together."""
 
 from __future__ import annotations
 

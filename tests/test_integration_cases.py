@@ -1,11 +1,12 @@
-"""Step 6 要求的三类端到端测试用例：
-1. 只需结构化数据的问题
-2. 只需非结构化数据的问题
-3. 多跳问题（非结构化 -> 计算 -> 结构化 -> 可能再非结构化）
+"""The three categories of end-to-end test cases required by Step 6:
+1. Questions needing only structured data
+2. Questions needing only unstructured data
+3. Multi-hop questions (unstructured -> compute -> structured -> possibly unstructured again)
 
-这些用例需要真实连通的 Databricks workspace（Genie Space、Vector Search Index、
-LLM serving endpoint 都已建好），在 .env 未配置真实凭据前会被跳过——一旦补上凭据，
-直接 `pytest tests/test_integration_cases.py -v` 即可跑通，不需要改代码。
+These cases need a real, reachable Databricks workspace (Genie Space, Vector Search
+Index, and LLM serving endpoint all already provisioned) — they're skipped until real
+credentials are configured in .env. Once credentials are in place, just run
+`pytest tests/test_integration_cases.py -v` — no code changes needed.
 """
 
 import pytest
@@ -28,7 +29,7 @@ _READY = bool(
 
 pytestmark = pytest.mark.skipif(
     not _READY,
-    reason="需要真实 Databricks 凭据 + 已建好的 GENIE_SPACE_ID / VECTOR_SEARCH_INDEX，暂不满足，跳过端到端测试。",
+    reason="Needs real Databricks credentials plus a provisioned GENIE_SPACE_ID / VECTOR_SEARCH_INDEX; not satisfied, skipping end-to-end tests.",
 )
 
 
@@ -40,22 +41,22 @@ def _run(question: str) -> dict:
 
 
 def test_structured_only_question():
-    result = _run("2013 年销售额最高的前 5 个产品是什么？")
+    result = _run("What were the top 5 products by 2013 sales?")
     assert result.get("structured_result")
     assert result["messages"][-1]["role"] == "assistant"
 
 
 def test_unstructured_only_question():
-    result = _run("Tier 2 Preferred Account 客户的账期和信用额度上限是多少？")
+    result = _run("What are the payment term and credit limit cap for a Tier 2 Preferred Account customer?")
     assert result.get("credit_info")
     assert result["messages"][-1]["role"] == "assistant"
 
 
 def test_multi_hop_credit_then_structured_question():
     result = _run(
-        "客户 Bike World 目前的年采购额和合作年限是多少？"
-        "按公司信用政策，他们能申请到的最高信用额度和账期是多少，"
-        "如果他们申请 100 万美元的信用额度需要谁审批？"
+        "What are customer Bike World's current annual purchase volume and years as a customer? "
+        "Per company credit policy, what's the maximum credit limit and payment term they can apply for, "
+        "and who needs to approve it if they apply for a $1,000,000 credit limit?"
     )
     assert result.get("credit_info")
     assert result.get("structured_result")
@@ -63,24 +64,26 @@ def test_multi_hop_credit_then_structured_question():
 
 
 def test_loop_count_never_exceeds_configured_max():
-    result = _run("一个故意模糊、可能导致反复判断信息不够的问题")
+    result = _run("A deliberately vague question likely to make the router repeatedly judge the information insufficient")
     assert result.get("loop_count", 0) <= settings.max_router_loops
 
 
 def test_multi_turn_memory_reuses_genie_conversation_and_resolves_pronouns():
-    """2026-07-28 补的多轮记忆：同一个 genie_conversation_id 要跨轮复用，且第二轮
-    里的代词（"他们"）要能借助历史正确指代第一轮问的客户，不需要用户重新报一遍
-    客户名。设计方法论见 docs/AGENT_MEMORY_DESIGN.md。"""
+    """Added 2026-07-28 to cover multi-turn memory: the same genie_conversation_id must
+    be reused across turns, and a pronoun in the second turn ("they") must correctly
+    resolve, via history, to the customer asked about in the first turn, without the
+    user having to repeat the customer's name. See docs/AGENT_MEMORY_DESIGN.md for the
+    design rationale."""
     graph = build_graph()
 
-    q1 = "客户 Bike World 的年采购额是多少？"
+    q1 = "What is customer Bike World's annual purchase volume?"
     result1 = graph.invoke(
         {"messages": [{"role": "user", "content": q1}], "user_query": q1, "loop_count": 0}
     )
     genie_cid_1 = result1.get("genie_conversation_id")
-    assert genie_cid_1, "第一轮应该已经产生一个 genie_conversation_id"
+    assert genie_cid_1, "the first turn should already have produced a genie_conversation_id"
 
-    q2 = "那他们的信用额度上限是多少？"
+    q2 = "And what's their credit limit cap?"
     messages = result1["messages"] + [{"role": "user", "content": q2}]
     result2 = graph.invoke(
         {
@@ -91,10 +94,14 @@ def test_multi_turn_memory_reuses_genie_conversation_and_resolves_pronouns():
         }
     )
     assert result2.get("genie_conversation_id") == genie_cid_1, (
-        "第二轮应该复用同一个 genie_conversation_id，不应该开新的 Genie 会话"
+        "the second turn should reuse the same genie_conversation_id, not open a new Genie conversation"
     )
-    # 第二轮问题里没有再提"Bike World"——如果历史没生效，router/finalize 拿到的只是
-    # 一句孤立的"那他们的信用额度上限是多少"，大概率会直接说不知道是哪个客户，走不到
-    # 结构化查询这一步；这里断言确实产生了结构化查询/业务规则结果，作为"理解了指代"
-    # 的间接证据（不断言具体金额，LLM 生成的自然语言措辞不适合做精确字符串匹配）。
+    # The second-turn question doesn't mention "Bike World" again — if history weren't
+    # taking effect, router/finalize would receive nothing but the isolated question
+    # "and what's their credit limit cap", and would very likely just say it doesn't
+    # know which customer is meant, never reaching the structured-query step; this
+    # asserts that a structured query/business-rule result was indeed produced, as
+    # indirect evidence that the reference was "understood" (not asserting a specific
+    # dollar amount, since LLM-generated natural-language phrasing isn't suited to exact
+    # string matching).
     assert result2.get("structured_result") or result2.get("business_rule_result")

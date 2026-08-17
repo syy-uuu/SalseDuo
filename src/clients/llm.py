@@ -1,4 +1,5 @@
-"""编排用的 LLM 客户端，统一从这里获取，走 Databricks Foundation Model API。"""
+"""LLM client used for orchestration, obtained from a single place here, via the
+Databricks Foundation Model API."""
 
 from __future__ import annotations
 

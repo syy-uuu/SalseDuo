@@ -1,13 +1,16 @@
-"""非结构化数据侧数据管线：
-1. 把 documents_generated/ 原始 docx 上传到 UC_VOLUME_PATH，留存原始文件。
-2. 解析+切块，写入 DELTA_TABLE_DOCS_CHUNKS。
-3. 创建（如不存在）基于该 Delta 表的 Delta Sync Index。
+"""Unstructured-data-side data pipeline:
+1. Upload the raw docx files under documents_generated/ to UC_VOLUME_PATH, preserving
+   the originals.
+2. Parse + chunk them, writing the result into DELTA_TABLE_DOCS_CHUNKS.
+3. Create a Delta Sync Index backed by that Delta table (if it doesn't already exist).
 
-前置条件：VECTOR_SEARCH_ENDPOINT 必须已存在——先跑
-`python -m ops.rag.setup_vs_endpoint` 建 endpoint，再跑这个脚本，不在这里重复创建 endpoint
-（见 `setup_vs_endpoint.py` 模块顶部说明，endpoint 和 index 的生命周期分开管理）。
+Prerequisite: VECTOR_SEARCH_ENDPOINT must already exist — run
+`python -m ops.rag.setup_vs_endpoint` to create the endpoint first, then run this
+script; this script does not create the endpoint itself (see the module docstring in
+`setup_vs_endpoint.py` — the endpoint's and the index's lifecycles are managed
+separately).
 
-用法: python -m ops.rag.ingest_docs
+Usage: python -m ops.rag.ingest_docs
 """
 
 from __future__ import annotations
@@ -31,20 +34,20 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def ensure_volume_exists(client) -> None:
-    # UC_VOLUME_PATH 形如 /Volumes/<catalog>/<schema>/<volume_name>
+    # UC_VOLUME_PATH looks like /Volumes/<catalog>/<schema>/<volume_name>
     parts = settings.uc_volume_path.strip("/").split("/")
     if len(parts) != 4 or parts[0] != "Volumes":
-        raise RuntimeError(f"UC_VOLUME_PATH 格式不对，期望 /Volumes/<catalog>/<schema>/<volume>: {settings.uc_volume_path}")
+        raise RuntimeError(f"UC_VOLUME_PATH has the wrong format, expected /Volumes/<catalog>/<schema>/<volume>: {settings.uc_volume_path}")
     _, catalog, schema, volume_name = parts
     full_name = f"{catalog}.{schema}.{volume_name}"
     try:
         client.volumes.read(full_name)
-        print(f"UC Volume 已存在: {full_name}")
+        print(f"UC Volume already exists: {full_name}")
     except Exception:
         client.volumes.create(
             catalog_name=catalog, schema_name=schema, name=volume_name, volume_type=VolumeType.MANAGED
         )
-        print(f"已创建 UC Volume: {full_name}")
+        print(f"Created UC Volume: {full_name}")
 
 
 def upload_raw_docs(client) -> None:
@@ -53,7 +56,7 @@ def upload_raw_docs(client) -> None:
         dest = f"{settings.uc_volume_path.rstrip('/')}/{path.name}"
         with open(path, "rb") as f:
             client.files.upload(dest, f, overwrite=True)
-        print(f"已上传原始文档: {dest}")
+        print(f"Uploaded raw document: {dest}")
 
 
 def _escape(value: str) -> str:
@@ -99,20 +102,21 @@ def create_and_populate_delta_table(client, chunks: list[Chunk]) -> None:
             "(chunk_id, source_file, chunk_seq, section_title, chunk_type, content) "
             f"VALUES {values}",
         )
-    print(f"已写入 {len(chunks)} 条 chunk 到 {table}")
+    print(f"Wrote {len(chunks)} chunks to {table}")
 
 
 def create_delta_sync_index(client) -> None:
-    """建 Delta Sync Index。假定 VECTOR_SEARCH_ENDPOINT 已经存在
-    （见 `ops/rag/setup_vs_endpoint.py`），这里不再创建/检查 endpoint 本身。
+    """Create the Delta Sync Index. Assumes VECTOR_SEARCH_ENDPOINT already exists (see
+    `ops/rag/setup_vs_endpoint.py`) — this does not create/check the endpoint itself.
 
-    用 databricks-sdk 自带的 `client.vector_search_indexes`，不用 databricks-ai-search 包——
-    原因同 `setup_vs_endpoint.py`：该包的认证只认 PAT/Service Principal 静态 token，不支持
-    本项目用的 Azure CLI（az login）动态令牌认证。
+    Uses databricks-sdk's own `client.vector_search_indexes`, not the
+    `databricks-ai-search` package — same reason as `setup_vs_endpoint.py`: that
+    package's auth only accepts a static PAT/Service Principal token, and doesn't
+    support the dynamic Azure CLI (`az login`) token this project uses.
     """
     try:
         client.vector_search_indexes.get_index(index_name=settings.vector_search_index)
-        print(f"Vector Search index 已存在: {settings.vector_search_index}")
+        print(f"Vector Search index already exists: {settings.vector_search_index}")
         return
     except Exception:
         pass
@@ -133,7 +137,7 @@ def create_delta_sync_index(client) -> None:
             ],
         ),
     )
-    print(f"已创建 Vector Search index: {settings.vector_search_index}")
+    print(f"Created Vector Search index: {settings.vector_search_index}")
 
 
 def main() -> None:
@@ -154,7 +158,7 @@ def main() -> None:
     create_and_populate_delta_table(client, chunks)
 
     create_delta_sync_index(client)
-    print("文档解析与索引建仓完成。")
+    print("Document parsing and index provisioning complete.")
 
 
 if __name__ == "__main__":

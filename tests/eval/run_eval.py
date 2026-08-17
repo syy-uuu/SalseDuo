@@ -1,8 +1,10 @@
-"""自动跑评测集：对 tests/eval/eval_set.json 里的每个问题跑一遍 agent，
-记录完整白盒追踪（router 判断、Genie 生成的 SQL、检索到的文档片段）+ 最终回答，
-再用 LLM 作为裁判对照 ground_truth 打分，把结果存到 tests/eval/results/ 下。
+"""Runs the evaluation set automatically: runs the agent once per question in
+tests/eval/eval_set.json, recording the full white-box trace (router decisions, SQL
+Genie generated, retrieved document chunks) plus the final answer, then uses an LLM as
+judge to grade each answer against its ground_truth, saving the results under
+tests/eval/results/.
 
-用法: python -m tests.eval.run_eval
+Usage: python -m tests.eval.run_eval
 """
 
 from __future__ import annotations
@@ -26,17 +28,17 @@ _GRADER_SYSTEM_PROMPT = render_prompt("eval_grader")
 
 
 class Grade(BaseModel):
-    verdict: Literal["CORRECT", "PARTIALLY_CORRECT", "INCORRECT"] = Field(description="评分结论")
-    reasoning: str = Field(description="打分理由，指出具体哪里对/哪里错")
+    verdict: Literal["CORRECT", "PARTIALLY_CORRECT", "INCORRECT"] = Field(description="the grading verdict")
+    reasoning: str = Field(description="the rationale for this grade, pointing out specifically what's right/wrong")
 
 
 def _grade(question: str, ground_truth: str, grading_notes: str, agent_answer: str) -> Grade:
     llm = get_llm().with_structured_output(Grade)
     content = (
-        f"问题: {question}\n\n"
-        f"标准答案: {ground_truth}\n\n"
-        f"评分要点: {grading_notes}\n\n"
-        f"Agent 实际回答: {agent_answer}"
+        f"Question: {question}\n\n"
+        f"Ground truth: {ground_truth}\n\n"
+        f"Grading notes: {grading_notes}\n\n"
+        f"Agent's actual answer: {agent_answer}"
     )
     return llm.invoke(
         [
@@ -60,7 +62,7 @@ def _run_one(graph, case: dict) -> dict:
         trace = result.get("trace", [])
         loop_count_used = result.get("loop_count", 0)
         error = None
-    except Exception as exc:  # noqa: BLE001 - 评测脚本不能因为单个用例崩溃就整体中断
+    except Exception as exc:  # noqa: BLE001 - the eval script shouldn't abort entirely just because one case crashed
         agent_answer = ""
         trace = []
         loop_count_used = None
@@ -72,7 +74,7 @@ def _run_one(graph, case: dict) -> dict:
             grade_result = _grade(question, case["ground_truth"], case["grading_notes"], agent_answer)
             grade = {"verdict": grade_result.verdict, "reasoning": grade_result.reasoning}
         except Exception as exc:  # noqa: BLE001
-            grade = {"verdict": "ERROR", "reasoning": f"评分失败: {exc}"}
+            grade = {"verdict": "ERROR", "reasoning": f"grading failed: {exc}"}
 
     return {
         "id": case["id"],
@@ -106,7 +108,7 @@ def main() -> None:
 
     results = []
     for i, case in enumerate(cases, 1):
-        print(f"[{i}/{len(cases)}] 跑 {case['id']}: {case['question'][:40]}...")
+        print(f"[{i}/{len(cases)}] running {case['id']}: {case['question'][:40]}...")
         result = _run_one(graph, case)
         verdict = result["grade"]["verdict"] if result["grade"] else "ERROR"
         print(f"    -> {verdict}")
@@ -125,9 +127,9 @@ def main() -> None:
         )
     )
 
-    print("\n=== 汇总 ===")
+    print("\n=== summary ===")
     print(json.dumps(summary, indent=2, ensure_ascii=False))
-    print(f"\n完整结果已存到: {out_path}")
+    print(f"\nFull results saved to: {out_path}")
 
 
 if __name__ == "__main__":

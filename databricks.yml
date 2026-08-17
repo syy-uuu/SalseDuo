@@ -1,26 +1,29 @@
-# Databricks Asset Bundle 配置：部署产物只有 Databricks Apps（聊天框 UI）。
-# UC Function / Genie Space / Delta 表 / Vector Search Index / Model Serving Endpoint
-# 的建仓与部署走 ops/ 下的 SDK 脚本（一次性建仓动作，不适合用声明式的 bundle
-# resources 管理——多数是需要读取解析结果动态生成的内容，不是静态配置）。
+# Databricks Asset Bundle config: the only deployment artifact managed here is the
+# Databricks App (the chat UI). Provisioning/deployment of the UC Function / Genie
+# Space / Delta table / Vector Search Index / Model Serving Endpoint goes through the
+# SDK scripts under ops/ (one-off provisioning actions that don't fit a declarative
+# bundle `resources` block — most of them need to read/parse results and generate
+# content dynamically, not just apply static config).
 #
-# 注意：这份文件在本地未安装 Databricks CLI 的环境下编写，尚未跑过
-# `databricks bundle validate`，请在具备 CLI 和真实凭据后先跑一遍 validate 再 deploy。
+# Note: this file was written without the Databricks CLI installed locally, and has
+# not yet been run through `databricks bundle validate`. Run validate once you have the
+# CLI and real credentials, before deploying.
 bundle:
   name: salesduo
 
 variables:
   databricks_app_name:
-    description: Databricks App 名称
+    description: Databricks App name
     default: salesduo-agent
   model_serving_endpoint_name:
-    description: 承载 ResponsesAgent 的 Model Serving Endpoint 名称
+    description: Name of the Model Serving Endpoint hosting the ResponsesAgent
     default: salesduo-agent
 
 resources:
   apps:
     salesduo_agent:
       name: ${var.databricks_app_name}
-      description: "SalesDuo AdventureWorks 结构化+非结构化数据问答聊天框"
+      description: "SalesDuo AdventureWorks structured+unstructured data Q&A chat app"
       source_code_path: ./app
       resources:
         - name: model-serving-endpoint
