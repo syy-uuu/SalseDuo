@@ -97,57 +97,231 @@ until the information is sufficient.
 
 ---
 
-## What this project actually does — three worked examples
+## What this project actually does — five worked examples
 
-These are three real questions from the evaluation set
-([`tests/eval/eval_set.json`](tests/eval/eval_set.json)), with the actual node path each
-one took pulled directly from its recorded white-box trace
-([`tests/eval/results/`](tests/eval/results/)) — not a hypothetical walkthrough.
+These are five real questions from the evaluation set
+([`tests/eval/eval_set.json`](tests/eval/eval_set.json)). For each one, every step below
+— the router's reasoning, the SQL Genie generated, the document passages retrieved, the
+final answer — is pulled verbatim from its recorded white-box trace
+([`tests/eval/results/`](tests/eval/results/)), not a hypothetical walkthrough. Router
+reasoning and Genie's natural-language answers were originally produced in Chinese
+(that's the language this project was built and tested in) and are translated here for
+readability; the SQL and retrieved document text are quoted exactly as generated,
+unchanged.
 
-**1. Structured-only** — *"How many orders has the store Brakes and Gears placed in
-total? What's the total amount?"*
-Answer: 12 orders, total amount ≈ $989,184.08.
-Trace: `router` (loop 0) judges this needs the database → `structured_agent` (loop 1)
-sends the question to Genie, which generates and runs
-```sql
-SELECT COUNT(*) AS order_count, SUM(salesorderheader.totaldue) AS total_amount
-FROM sales.salesorderheader
-JOIN sales.customer ON salesorderheader.customerid = customer.customerid
-JOIN sales.store ON customer.storeid = store.businessentityid
-WHERE store.name = 'Brakes and Gears' AND salesorderheader.totaldue IS NOT NULL
-```
-→ `router` (loop 1) judges the answer is already complete → `finalize`. `unstructured_agent`
-is never invoked at all — the router correctly recognized this question doesn't need the
-policy documents.
+The first two show the router correctly picking *one* side and stopping — no wasted
+hops. The last three are all `multi_hop` questions, chosen to show that "multi-hop"
+doesn't mean "always many hops": the router decides how many are actually needed, case
+by case.
 
-**2. Unstructured-only** — *"What is the payment term, in days, for a Tier 1 Strategic
-Partner customer? How much advance payment is required?"*
-Answer: Net 90 days, 0% advance payment required.
-Trace: `router` (loop 0) judges this needs the policy documents →
-`unstructured_agent` (loop 1) retrieves the top-8 chunks from Vector Search, the
-strongest match (score 0.602) landing in section "2. Customer Tiering and Payment Terms
-Matrix" of `AW_Corporate_Credit_and_Payment_Terms_Policy.docx` → `router` (loop 1) judges
-the answer is complete → `finalize`. `structured_agent`/Genie is never invoked — the
-mirror image of example 1.
+### Example 1 — Structured-only
 
-**3. Multi-hop** (the case this whole architecture exists for) — *"Roughly how long has
-the store Brakes and Gears been a customer, from its first order to now? Per company
-credit policy, what tier does that qualify it for, and what are the corresponding
-maximum credit limit and payment term?"*
-Answer: ~4 years, total purchase volume ≈ $989,184 (below the >$1M threshold Tier 2
-requires) → Tier 3 Standard Account, maximum credit limit $250,000, payment term Net 45
-days.
-Trace this time takes two full loops: `router` (loop 0) → `unstructured_agent` (loop 1)
-retrieves the tiering-matrix policy passage first, so it knows what thresholds even
-matter → `router` (loop 1) now knows it needs the customer's actual numbers →
-`structured_agent` (loop 2) has Genie compute the real relationship length and purchase
-volume from order history, then call the `calculate_credit_terms` UC Function as a
-scalar function against those values (`CROSS JOIN LATERAL ... calculate_credit_terms(...)`)
-→ `router` (loop 2) judges the answer is complete → `finalize`. This is the behavior the
-whole project is built to demonstrate: the router genuinely decided, at runtime, that it
-needed the policy rule *before* it could know what to compute, then went and computed
-it — not a fixed two-step pipeline, and not something Genie could do on its own since
-the tiering rule lives in a document it never sees.
+**Question**: *"How many orders has the store Brakes and Gears placed in total? What's
+the total amount?"*
+
+- **Step 1 — `router` (loop 0)**: reasons *"This needs the specific customer's
+  transaction data and order history — should query the structured database,"* and
+  sets `next_step = structured`.
+- **Step 2 — `structured_agent` (loop 1)**: sends the question to Genie, which writes
+  and runs:
+  ```sql
+  SELECT COUNT(*) AS order_count, SUM(salesorderheader.totaldue) AS total_amount
+  FROM sales.salesorderheader
+  JOIN sales.customer ON salesorderheader.customerid = customer.customerid
+  JOIN sales.store ON customer.storeid = store.businessentityid
+  WHERE store.name = 'Brakes and Gears' AND salesorderheader.totaldue IS NOT NULL
+  ```
+  Genie answers: *"Brakes and Gears has placed a total of 12 orders, with a combined
+  amount of 989,184.08."*
+- **Step 3 — `router` (loop 1)**: reasons *"Already have the order count and total
+  amount — no need to keep querying,"* and sets `next_step = finalize`.
+- **Step 4 — `finalize`**: passes the answer through as the final response.
+
+`unstructured_agent` is never invoked — the router correctly recognized this question
+doesn't touch the policy documents at all.
+
+### Example 2 — Unstructured-only
+
+**Question**: *"What is the payment term, in days, for a Tier 1 Strategic Partner
+customer? How much advance payment is required?"*
+
+- **Step 1 — `router` (loop 0)**: reasons *"This needs the company's credit/compliance
+  policy rules to determine a Tier 1 Strategic Partner customer's payment term and
+  advance-payment requirement,"* and sets `next_step = unstructured`.
+- **Step 2 — `unstructured_agent` (loop 1)**: runs a Vector Search retrieval and gets
+  back 8 chunks; the top match (similarity score 0.602) is this passage from
+  `AW_Corporate_Credit_and_Payment_Terms_Policy.docx`, section "2. Customer Tiering and
+  Payment Terms Matrix":
+  > Customer Classification / Tier: Tier 1 Strategic Partner; Advance Payment Required:
+  > 0% Advance Required; Maximum Approved Credit Term: Net 90 Days; Maximum Allowed
+  > Credit Limit: Above $750,000 USD (Requires CFO Sign-off); Qualification Criteria:
+  > Global distributors or strategic OEMs with specific board approval.
+- **Step 3 — `router` (loop 1)**: reasons *"Tier 1 Strategic Partner's payment term is
+  90 days with 0% advance payment — the information needed for this question has been
+  found, no further action needed,"* and sets `next_step = finalize`.
+- **Step 4 — `finalize`**: *"A Tier 1 Strategic Partner customer's payment term is 90
+  days, with no advance payment required (0% Advance Required). The source information
+  is complete; this answer is based on the retrieved policy-document content."*
+
+`structured_agent`/Genie is never invoked — the mirror image of Example 1.
+
+### Example 3 — Multi-hop, two loops: policy first, then the customer's real numbers
+
+**Question**: *"Roughly how long has the store Brakes and Gears been a customer, from
+its first order to now? Per company credit policy, what tier does that qualify it for,
+and what are the corresponding maximum credit limit and payment term?"*
+
+- **Step 1 — `router` (loop 0)**: reasons *"This needs the company's credit policy
+  rules to determine the customer tier, maximum credit limit, and payment term,"* and
+  sets `next_step = unstructured` — notably, it reaches for the policy *before* it has
+  any customer data at all.
+- **Step 2 — `unstructured_agent` (loop 1)**: retrieves the same tiering-matrix policy
+  section as Example 2, plus the document header, so it now knows what thresholds and
+  tiers exist to be matched against.
+- **Step 3 — `router` (loop 1)**: reasons *"Now need Brakes and Gears' transaction
+  data, order history, and amounts to determine its customer tier and credit limit —
+  the policy rule/parameters have been obtained, next step needs the structured
+  database,"* and sets `next_step = structured`.
+- **Step 4 — `structured_agent` (loop 2)**: passes the question *plus* the retrieved
+  policy text to Genie as context. Genie writes one query that computes the
+  relationship length and purchase volume from real order history, then feeds those
+  values straight into the `calculate_credit_terms` UC Function as a scalar call:
+  ```sql
+  WITH store_info AS (
+    SELECT businessentityid FROM sales.store WHERE name = 'Brakes and Gears'
+  ), customer_info AS (
+    SELECT customerid FROM sales.customer WHERE storeid IN (SELECT businessentityid FROM store_info)
+  ), first_order AS (
+    SELECT MIN(orderdate) AS first_order_date FROM sales.salesorderheader
+    WHERE customerid IN (SELECT customerid FROM customer_info) AND orderdate IS NOT NULL
+  ), total_purchase AS (
+    SELECT SUM(totaldue) AS total_purchase FROM sales.salesorderheader
+    WHERE customerid IN (SELECT customerid FROM customer_info) AND totaldue IS NOT NULL
+  )
+  SELECT relationship_years, annual_purchase_volume_usd,
+         credit_terms.tier, credit_terms.max_credit_limit_usd, credit_terms.max_credit_term_days
+  FROM (
+    SELECT DATEDIFF(YEAR, (SELECT first_order_date FROM first_order), CURRENT_DATE()) AS relationship_years,
+           try_divide((SELECT total_purchase FROM total_purchase),
+                       NULLIF(DATEDIFF(YEAR, (SELECT first_order_date FROM first_order), CURRENT_DATE()), 0)) AS annual_purchase_volume_usd
+  ) calc
+  CROSS JOIN LATERAL (
+    SELECT salesduo_agent_tools.calculate_credit_terms(
+      CAST(calc.relationship_years AS DOUBLE), CAST(calc.annual_purchase_volume_usd AS DOUBLE)
+    ) AS credit_terms
+  ) func
+  ```
+  Genie answers: *"Brakes and Gears has been a customer for about 4 years, with an
+  average annual purchase volume of $247,296.02. Per company credit policy, this
+  corresponds to a Tier 3 Standard Account, with a maximum credit limit of $250,000
+  and a maximum payment term of 45 days."*
+- **Step 5 — `router` (loop 2)**: this run happened to hit the known occasional
+  malformed-output issue described in "Known issues" — after 3 failed structured-output
+  attempts, it safely degraded straight to `next_step = finalize` rather than crashing.
+- **Step 6 — `finalize`**: passes through the same answer from Step 4, adding *"Since
+  the information gathered fully answers the question, no incompleteness disclaimer is
+  needed."*
+
+Two things worth noticing: the router genuinely decided, at runtime and before knowing
+the customer's numbers, that it needed the policy rule first — this is the dynamic
+ordering the whole architecture exists to enable, not a fixed two-step pipeline. And
+the format-error safety net (Step 5) wasn't a hypothetical in this run — it actually
+fired, and the request still completed correctly instead of crashing.
+
+### Example 4 — Multi-hop, two loops: a business rule that needs both a document and a number
+
+**Question**: *"What's the largest single order amount for Brakes and Gears? If that
+transaction were settled via Corporate Cheque, would it comply with the company's
+large-transaction compliance regulation?"*
+
+- **Step 1 — `router` (loop 0)**: reasons *"This needs the large-transaction compliance
+  policy document, to determine whether Brakes and Gears' largest order amount complies
+  with the company's large-transaction compliance rules,"* and sets
+  `next_step = unstructured`.
+- **Step 2 — `unstructured_agent` (loop 1)**: retrieves the settlement-method rules
+  from `AW_Large_Transaction_and_Special_Settlement_Compliance_Regulation-v2.docx`,
+  including the row stating Corporate Cheques are *"Strictly Prohibited for Bulk
+  Supply."*
+- **Step 3 — `router` (loop 1)**: reasons *"Now need Brakes and Gears' transaction data
+  and order history to determine the largest order amount, combined with the policy
+  rule already retrieved, to judge compliance,"* and sets `next_step = structured`.
+- **Step 4 — `structured_agent` (loop 2)**: Genie finds the largest order and calls the
+  `check_large_transaction_compliance` UC Function directly with `'CORPORATE_CHEQUE'`
+  as the settlement method:
+  ```sql
+  WITH store_id AS (
+    SELECT businessentityid FROM sales.store WHERE name = 'Brakes and Gears'
+  ), store_customers AS (
+    SELECT customerid FROM sales.customer WHERE storeid IN (SELECT businessentityid FROM store_id)
+  ), max_order AS (
+    SELECT MAX(totaldue) AS max_totaldue FROM sales.salesorderheader
+    WHERE customerid IN (SELECT customerid FROM store_customers)
+  )
+  SELECT max_totaldue AS order_amount_usd,
+         salesduo_agent_tools.check_large_transaction_compliance('CORPORATE_CHEQUE', max_totaldue, 'USD', 0) AS compliance_result
+  FROM max_order;
+  ```
+  Genie answers: *"Brakes and Gears' largest single order is $124,249.49. If this
+  transaction were settled via Corporate Cheque, the compliance status is 'Strictly
+  Prohibited for Bulk Supply' — this settlement method isn't allowed."*
+- **Step 5 — `router` (loop 2)**: reasons *"All the information needed to answer the
+  question is now available, including the largest order amount and the settlement
+  method's compliance status — the final answer can be given directly,"* and sets
+  `next_step = finalize`.
+- **Step 6 — `finalize`**: *"Brakes and Gears' largest single order is $124,249.49. Per
+  the company's large-transaction compliance rules, settling it via Corporate Cheque
+  would not be allowed — this method is strictly prohibited due to severe clearing
+  delays and bounce risk, and is banned for global distributors without a valid
+  corporate waiver document."*
+
+Same two-hop shape as Example 3, different content — the pattern of "retrieve the rule,
+then compute against it" repeats, but nothing about the code is question-specific; it's
+the same four nodes every time.
+
+### Example 5 — Multi-hop by category, one hop in practice
+
+**Question**: *"What's the largest single order amount for Health Spa, Limited? If they
+wanted to settle a transaction of the same amount via Letter of Credit, would that meet
+the standard-approval status?"*
+
+- **Step 1 — `router` (loop 0)**: reasons *"This needs Health Spa, Limited's
+  transaction data and order history to determine the largest order amount, and to
+  compute the approval status for Letter of Credit settlement,"* and sets
+  `next_step = structured` directly — no detour through `unstructured_agent` first.
+- **Step 2 — `structured_agent` (loop 1)**: Genie finds the largest order and calls
+  `check_large_transaction_compliance` with `'LETTER_OF_CREDIT'`:
+  ```sql
+  WITH max_order AS (
+    SELECT soh.totaldue
+    FROM sales.store s
+    JOIN sales.customer c ON s.businessentityid = c.storeid
+    JOIN sales.salesorderheader soh ON c.customerid = soh.customerid
+    WHERE s.name = 'Health Spa, Limited' AND soh.totaldue IS NOT NULL
+    ORDER BY soh.totaldue DESC
+    LIMIT 1
+  )
+  SELECT totaldue AS max_order_amount,
+         salesduo_agent_tools.check_large_transaction_compliance('LETTER_OF_CREDIT', totaldue, 'USD', 0) AS compliance_result
+  FROM max_order;
+  ```
+  Genie answers: *"Health Spa, Limited's largest single order is $135,606.68. If they
+  wanted to settle a transaction of the same amount via Letter of Credit, the approval
+  status is 'Not Standard Below $250k Threshold' — this settlement method isn't
+  allowed; it would require an irrevocable Letter of Credit confirmed by a top-tier
+  international financial institution, plus pre-clearance by Treasury."*
+- **Step 3 — `router` (loop 1)**: reasons *"All the information needed to answer the
+  question is now available ... the question can be answered directly, no further
+  querying needed,"* and sets `next_step = finalize`.
+- **Step 4 — `finalize`**: passes the answer through unchanged.
+
+`unstructured_agent` is never invoked, even though this question is filed under the
+same `multi_hop` category as Examples 3 and 4. The reason it doesn't need the policy
+document this time is structural, not accidental: the $250k Letter-of-Credit threshold
+is already baked into the `check_large_transaction_compliance` UC Function itself, so
+once Genie has the order amount, calling the function *is* consulting the policy — router
+correctly judged a second, separate document lookup would be redundant. This is the
+behavior the whole design is meant to produce: the number of hops is a runtime decision,
+not a property of which category a question happens to be labeled with.
 
 ---
 
