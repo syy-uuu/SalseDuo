@@ -97,6 +97,60 @@ until the information is sufficient.
 
 ---
 
+## What this project actually does — three worked examples
+
+These are three real questions from the evaluation set
+([`tests/eval/eval_set.json`](tests/eval/eval_set.json)), with the actual node path each
+one took pulled directly from its recorded white-box trace
+([`tests/eval/results/`](tests/eval/results/)) — not a hypothetical walkthrough.
+
+**1. Structured-only** — *"How many orders has the store Brakes and Gears placed in
+total? What's the total amount?"*
+Answer: 12 orders, total amount ≈ $989,184.08.
+Trace: `router` (loop 0) judges this needs the database → `structured_agent` (loop 1)
+sends the question to Genie, which generates and runs
+```sql
+SELECT COUNT(*) AS order_count, SUM(salesorderheader.totaldue) AS total_amount
+FROM sales.salesorderheader
+JOIN sales.customer ON salesorderheader.customerid = customer.customerid
+JOIN sales.store ON customer.storeid = store.businessentityid
+WHERE store.name = 'Brakes and Gears' AND salesorderheader.totaldue IS NOT NULL
+```
+→ `router` (loop 1) judges the answer is already complete → `finalize`. `unstructured_agent`
+is never invoked at all — the router correctly recognized this question doesn't need the
+policy documents.
+
+**2. Unstructured-only** — *"What is the payment term, in days, for a Tier 1 Strategic
+Partner customer? How much advance payment is required?"*
+Answer: Net 90 days, 0% advance payment required.
+Trace: `router` (loop 0) judges this needs the policy documents →
+`unstructured_agent` (loop 1) retrieves the top-8 chunks from Vector Search, the
+strongest match (score 0.602) landing in section "2. Customer Tiering and Payment Terms
+Matrix" of `AW_Corporate_Credit_and_Payment_Terms_Policy.docx` → `router` (loop 1) judges
+the answer is complete → `finalize`. `structured_agent`/Genie is never invoked — the
+mirror image of example 1.
+
+**3. Multi-hop** (the case this whole architecture exists for) — *"Roughly how long has
+the store Brakes and Gears been a customer, from its first order to now? Per company
+credit policy, what tier does that qualify it for, and what are the corresponding
+maximum credit limit and payment term?"*
+Answer: ~4 years, total purchase volume ≈ $989,184 (below the >$1M threshold Tier 2
+requires) → Tier 3 Standard Account, maximum credit limit $250,000, payment term Net 45
+days.
+Trace this time takes two full loops: `router` (loop 0) → `unstructured_agent` (loop 1)
+retrieves the tiering-matrix policy passage first, so it knows what thresholds even
+matter → `router` (loop 1) now knows it needs the customer's actual numbers →
+`structured_agent` (loop 2) has Genie compute the real relationship length and purchase
+volume from order history, then call the `calculate_credit_terms` UC Function as a
+scalar function against those values (`CROSS JOIN LATERAL ... calculate_credit_terms(...)`)
+→ `router` (loop 2) judges the answer is complete → `finalize`. This is the behavior the
+whole project is built to demonstrate: the router genuinely decided, at runtime, that it
+needed the policy rule *before* it could know what to compute, then went and computed
+it — not a fixed two-step pipeline, and not something Genie could do on its own since
+the tiering rule lives in a document it never sees.
+
+---
+
 ## Repository structure at a glance
 
 ```
