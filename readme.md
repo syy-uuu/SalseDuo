@@ -152,6 +152,12 @@ given need" quick-reference table, is in [`docs/REPOSITORY_STRUCTURE.md`](docs/R
   names, policy IDs (e.g. `AW-FIN-POL-003`), and specific clause values mentioned in
   them are all invented for practice purposes, don't correspond to any real company's
   real policy, and should not be used as a reference for actual business rules.
+- **Test artifacts** (`tests/eval/results/`): a few files under here retain real Genie
+  `conversation_id` values left over from actual test runs against the live workspace
+  used during development. The Azure resources behind that workspace have since been
+  deleted, so these IDs are orphaned and not usable to access anything — they were left
+  as-is rather than scrubbed, so the recorded runs stay an accurate, verifiable record
+  of what was actually observed.
 
 ---
 
