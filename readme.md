@@ -30,73 +30,6 @@ work.
 
 ---
 
-## Architecture
-
-```
-                     ┌───────────────────────────────────────────┐
-                     │  MLflow ResponsesAgent (predict / predict_stream)
-                     │  ← the sole external contract; the Databricks Apps chat box only knows this interface
-                     └──────────────────┬──────────────────────────┘
-                                        │
-                          LangGraph StateGraph (router node + looping edge)
-                                        │
-              ┌─────────────────────────┼─────────────────────────┐
-              │                         │                         │
-         router node               structured_agent          unstructured_agent
-   (decides each step:            (calls the Genie Space:        (calls Vector Search:
-    keep querying structured /     AdventureWorksLT tables +      chunk retrieval over
-    keep querying unstructured     UC Function business-rule       documents_generated/)
-    / finish)                      computation)
-              │                         │                         │
-              └──── loops back to router until it judges the information sufficient (or hits the loop cap) ──┘
-                                        │
-                                    finalize node
-                              (synthesizes all intermediate results into a final answer)
-```
-
-- `router` uses Pydantic forced structured output at every step to decide `next_step`
-  (`structured` / `unstructured` / `finalize`), never parsing free text, avoiding a
-  routing-result parse failure making the state machine's behavior unpredictable;
-  `loop_count` exceeding `MAX_ROUTER_LOOPS` forces a move to `finalize`, a safety net
-  against an infinite loop.
-- `structured_agent` and `unstructured_agent` are two **completely independent, mutually
-  unaware** nodes — the "hybrid query" capability comes from LangGraph's graph
-  structure, not from any built-in capability of Genie or Vector Search themselves.
-
-### An implementation detail worth calling out: "tool" calling
-
-The structured agent is handed entirely to the Genie Space — no question about that;
-what's interesting is how it "knows how to compute business rules." The approach is to
-pre-create two UC SQL Functions (`calculate_credit_terms`,
-`check_large_transaction_compliance`) and use them as Genie's "tools." But this doesn't
-go through the Genie Space's formal "attach a function as a tool" feature — that was
-tried, and the `update_space` API fails outright whenever the payload includes an
-`instructions.sql_functions` field (the UI can save it, but the API can't write it — a
-confirmed platform limitation on this workspace, not a code bug). The approach that
-actually works is writing the function's fully-qualified name, along with the exact
-field names of its return STRUCT, directly into Genie's free-text Instructions — Genie
-then calls it correctly per that description when generating SQL.
-
-**This technique solves a business-rule computation problem on the structured-data
-side — it has nothing to do with unstructured document retrieval.** Genie never touches
-the content of the documents under `documents_generated/` at any point in this project.
-Unstructured retrieval is handled entirely by the `unstructured_agent` node calling
-Vector Search on its own: this experiment's unstructured text volume is small (two docx
-files), and the business logic can be distilled into just 2 functions, so a lightweight,
-self-built Vector Search retrieval path was chosen instead of relying on Genie's native
-document-retrieval capability — partly also to set up a comparison against the
-alternative path of "handing both structured and unstructured entirely to LangGraph
-orchestration." That comparison was originally planned as a formal A/B test, but it was
-never actually completed — the code logic is implemented, what's missing is a
-systematic comparison result (see "Development retrospective" below).
-
-At the orchestration level overall, `router` uses forced structured output to decide
-`next_step`, and `build_graph.py`'s conditional edge then dispatches to
-`structured_agent` (calls Genie) or `unstructured_agent` (calls Vector Search), looping
-until the information is sufficient.
-
----
-
 ## What this project actually does — five worked examples
 
 These are five real questions from the evaluation set
@@ -322,6 +255,73 @@ once Genie has the order amount, calling the function *is* consulting the policy
 correctly judged a second, separate document lookup would be redundant. This is the
 behavior the whole design is meant to produce: the number of hops is a runtime decision,
 not a property of which category a question happens to be labeled with.
+
+---
+
+## Architecture
+
+```
+                     ┌───────────────────────────────────────────┐
+                     │  MLflow ResponsesAgent (predict / predict_stream)
+                     │  ← the sole external contract; the Databricks Apps chat box only knows this interface
+                     └──────────────────┬──────────────────────────┘
+                                        │
+                          LangGraph StateGraph (router node + looping edge)
+                                        │
+              ┌─────────────────────────┼─────────────────────────┐
+              │                         │                         │
+         router node               structured_agent          unstructured_agent
+   (decides each step:            (calls the Genie Space:        (calls Vector Search:
+    keep querying structured /     AdventureWorksLT tables +      chunk retrieval over
+    keep querying unstructured     UC Function business-rule       documents_generated/)
+    / finish)                      computation)
+              │                         │                         │
+              └──── loops back to router until it judges the information sufficient (or hits the loop cap) ──┘
+                                        │
+                                    finalize node
+                              (synthesizes all intermediate results into a final answer)
+```
+
+- `router` uses Pydantic forced structured output at every step to decide `next_step`
+  (`structured` / `unstructured` / `finalize`), never parsing free text, avoiding a
+  routing-result parse failure making the state machine's behavior unpredictable;
+  `loop_count` exceeding `MAX_ROUTER_LOOPS` forces a move to `finalize`, a safety net
+  against an infinite loop.
+- `structured_agent` and `unstructured_agent` are two **completely independent, mutually
+  unaware** nodes — the "hybrid query" capability comes from LangGraph's graph
+  structure, not from any built-in capability of Genie or Vector Search themselves.
+
+### An implementation detail worth calling out: "tool" calling
+
+The structured agent is handed entirely to the Genie Space — no question about that;
+what's interesting is how it "knows how to compute business rules." The approach is to
+pre-create two UC SQL Functions (`calculate_credit_terms`,
+`check_large_transaction_compliance`) and use them as Genie's "tools." But this doesn't
+go through the Genie Space's formal "attach a function as a tool" feature — that was
+tried, and the `update_space` API fails outright whenever the payload includes an
+`instructions.sql_functions` field (the UI can save it, but the API can't write it — a
+confirmed platform limitation on this workspace, not a code bug). The approach that
+actually works is writing the function's fully-qualified name, along with the exact
+field names of its return STRUCT, directly into Genie's free-text Instructions — Genie
+then calls it correctly per that description when generating SQL.
+
+**This technique solves a business-rule computation problem on the structured-data
+side — it has nothing to do with unstructured document retrieval.** Genie never touches
+the content of the documents under `documents_generated/` at any point in this project.
+Unstructured retrieval is handled entirely by the `unstructured_agent` node calling
+Vector Search on its own: this experiment's unstructured text volume is small (two docx
+files), and the business logic can be distilled into just 2 functions, so a lightweight,
+self-built Vector Search retrieval path was chosen instead of relying on Genie's native
+document-retrieval capability — partly also to set up a comparison against the
+alternative path of "handing both structured and unstructured entirely to LangGraph
+orchestration." That comparison was originally planned as a formal A/B test, but it was
+never actually completed — the code logic is implemented, what's missing is a
+systematic comparison result (see "Development retrospective" below).
+
+At the orchestration level overall, `router` uses forced structured output to decide
+`next_step`, and `build_graph.py`'s conditional edge then dispatches to
+`structured_agent` (calls Genie) or `unstructured_agent` (calls Vector Search), looping
+until the information is sufficient.
 
 ---
 
