@@ -12,15 +12,8 @@ Agent."
 of the [`agent-langgraph`](https://github.com/databricks/app-templates/tree/main/agent-langgraph)
 template (MLflow ResponsesAgent + LangGraph + Databricks Apps deployment) +
 [`streamlit-chatbot-app`](https://github.com/databricks/app-templates/tree/main/streamlit-chatbot-app)'s
-frontend calling pattern, but with the Genie/Vector Search/UC Function tool integration —
-left "commented out, for the user to fill in" in the template — actually built out for
-real, using a hand-written multi-node routing graph (rather than the template's default
-single-node ReAct loop) to implement dynamic multi-hop between "structured ↔
-unstructured." The closest thing to "structured+unstructured fusion" in `app-templates`
-is `rag-chat` in the Showcase section (pure RAG, pgvector+Lakebase, no Genie/structured
-querying) and `inventory-intelligence`/`agentic-support-console` (a Genie analytics
-panel + Lakebase CRUD, but not a LangGraph multi-hop Agent architecture) — SalesDuo's
-particular combination has no direct counterpart among the official templates.
+frontend calling pattern, but with the Genie/Vector Search/UC Function tool integration to implement dynamic multi-hop between "structured ↔
+unstructured." 
 
 In particular, as the engineer building this, this exercise deliberately emphasizes a
 **white-box implementation**, to build a real understanding of the agent framework and
